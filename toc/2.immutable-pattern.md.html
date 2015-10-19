@@ -150,10 +150,198 @@
     }
 }</code></pre>
 
-<p>输出：</p>
+<p>输出：
+String类的replace方法不会更改实例本身，而StringBuffer类的replace方法会更改实例本身。StringBuffer类是mutable。</p>
+
+<p>StringBuffer这个非Immutable类的影响下，连UserInfo类都变成了mutable类.</p>
 
 <pre><code>userinfo = [ UserInfo :&lt;info name="Alice" adddress="Alaska" /&gt;]
 userinfo = [ UserInfo :&lt;info name="Bobby" adddress="Alaska" /&gt;]</code></pre>
+
+<ul>
+<li>判断是不是Immutable</li>
+</ul>
+
+<pre><code>public class Line{
+    private final Point startPoint;
+    private final Point endPoint;
+
+    public Line(int startx,int starty,int endx,int endy){
+        this.startPoint=new Point(startx,endx);
+        this.startPoint=new Point(starty,endy);
+    }
+
+    public Line(Point startPoint,Point endPoint){
+        this.startPoint=startPoint;
+        this.endPoint=endPoint;
+    }
+
+    public int getStartX(){return startPoint.getX();}
+    public int getStartY(){return startPoint.getY();}
+    public int getEndX(){return endPoint.getX();}
+    public int getEndY(){return endPoint.getY();}
+
+    public String toString(){
+        return "[ Line: "+startPoint+"-"+endPoint+" ]";
+    }
+}</code></pre>
+
+<pre><code>public class Point{
+    public int x;
+    public int y;
+
+    punlic Point(int x,int y){
+        this.x=x;
+        this.y=y;
+    }
+
+    public int getX(){return x;}
+    public int getY(){return y;}
+
+    public String toString(){
+        return "("+x+","+y+")";
+    }
+}
+</code></pre>
+
+<p>改变Line类的Main类</p>
+
+<pre><code>public class Main{
+    public static void main(String []args){}
+        //建立实例
+        Point p1=new Point(0,0);
+        Point p2=new Point(100,0);
+        Line line=new Line(p1,p2);
+
+        //显示
+        System.out.println("line = "+line);
+
+        //改变状态
+        p1.x=150;
+        p2.x=150;
+        p2.y=250;
+
+        //再次显示
+        System.out.println("line = "+line);
+
+}</code></pre>
+
+<p>输出：
+虽然只是随便替换了一些p1,p2这两个point的实例，可是Line的实例属性的确已经改变了。在Point这个非Immutable 的类的影响下，连Line类都变成mutable</p>
+
+<pre><code>line = [ Line:(0,0)-(100,0)]
+line = [ Line:(150,0)-(150,250)]直线移动了</code></pre>
+
+<ul>
+<li>将Line类设置成Immutable的诀窍</li>
+</ul>
+
+<p>可以将Point的x字段与y字段都设为public final，就可以做到。可以point不管是Immutable还是mutable，都可以将Line设置成Immutable。</p>
+
+<pre><code>public class Line{
+    private final Point startPoint;
+    private final Point endPoint;
+
+    public Line(int startx,int starty,int endx,int endy){
+        this.startPoint=new Point(startx,endx);
+        this.startPoint=new Point(starty,endy);
+    }
+
+    public Line(Point startPoint,Point endPoint){
+        //我们建立一个拥有与所给予的实例相同属性的新实例，将此新势力指定到字段中
+        //使用new拷贝了Point类的实例，但是也可以使用clone的clone方法，不过clone方法会执行shallow copy（浅拷贝）
+        this.startPoint=new Point(startPoint.x,startPoint.y);
+        this.endPoint=new Point(endPoint.x,endPoint.y);
+    }
+
+    public int getStartX(){return startPoint.getX();}
+    public int getStartY(){return startPoint.getY();}
+    public int getEndX(){return endPoint.getX();}
+    public int getEndY(){return endPoint.getY();}
+
+    public String toString(){
+        return "[ Line: "+startPoint+"-"+endPoint+" ]";
+    }
+}</code></pre>
+
+<ul>
+<li><p>用mutable实例调用Immutable的实例需要注意什么？</p>
+
+<ul><li>MutablePerson.java</li></ul></li>
+</ul>
+
+<pre><code>
+public final class MutablePerson{
+    private final String name;
+    private final String address;
+
+    public MutablePerson(String name,String address){
+        this.name=name;
+        this.address=address;
+    }
+
+    public MutablePerson(ImmutablePerson person){
+        this.name=person.getName();
+        this.address=person.getAddress();
+    }
+
+    public synchronized void setPerson(String newName,String newAddress){
+        this.name=newName;
+        this.address=newAddress;
+    }
+
+    public synchronized ImmutablePerson getImmutablePerson(){
+        return new ImmutablePerson(this);
+    }
+
+    public String getName(){ //Called only by ImmutablePerson
+        return name;
+    }
+
+    public String getAddress(){ //Called only by ImmutablePerson
+        return address;
+    }
+
+    public String toString(){
+        return "[ ImmutablePerson:" +name+","+address+" ]";
+    }
+}</code></pre>
+
+<ul>
+<li>ImmutablePerson.java</li>
+</ul>
+
+<pre><code>
+public final class ImmutablePerson{
+    private final String name;
+    private final String address;
+
+    public ImmutablePerson(String name,String address){
+        this.name=name;
+        this.address=address;
+    }
+
+    public ImmutablePerson(MutablePerson person){
+        this.name=person.getName();
+        this.address=person.getAddress();
+    }
+
+    public MutablePerson getMutablePerson(){
+        return new MutablePerson(this);
+    }
+
+    public String getName(){
+        return name;
+    }
+
+    public String getAddress(){
+        return address;
+    }
+
+    public String toString(){
+        return "[ ImmutablePerson:" +name+","+address+" ]";
+    }
+}</code></pre>
 <script type='text/javascript'>
 $(document).ready(function(){
   if($('code').length>0){
