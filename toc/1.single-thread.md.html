@@ -1,0 +1,489 @@
+﻿<!doctype html public '-//W3C//DTD HTML 4.0 Transitional //EN'>
+<html>
+<head>
+<title>1.single-thread</title>
+<meta charset='UTF-8' />
+<meta name='generator' content='EverEdit' />
+<link href='E:\EverEdit\mode\markdown\default.css' rel='stylesheet'></link>
+<link href='E:\EverEdit\mode\markdown\prettify.css' rel='stylesheet'></link>
+<script type='text/javascript' src='E:\EverEdit\mode\markdown\prettify.js'></script>
+<script type='text/javascript' src='E:\EverEdit\mode\markdown\jquery-1.10.2.min.js'></script>
+<script type='text/javascript' src='E:\EverEdit\mode\markdown\toc.js'></script>
+</head>
+<body>
+<div id='generated-toc'></div>
+<h2>概念</h2>
+
+<p>Sigle Threaded Execution 是指“以1个线程执行”的意思。就像细独木桥只能允许一个人通行一样，这个Pattern用来限制同时只让一个线程运行</p>
+
+<h2>不使用Single Threaded Execution Pattern的范例</h2>
+
+<ul>
+<li>Main.java</li>
+</ul>
+
+<pre><code>package com.jptiancai.thread;
+
+public class Main {
+
+    public static void main(String[] args) {
+        System.out.println("Testing Gate,hit CTRL+C to exit.");
+        Gate gate=new Gate();
+        new UserThread(gate,"Alice","Alaska").start();
+        new UserThread(gate,"Bobby","Brazil").start();
+        new UserThread(gate,"Chris","China").start();
+    }
+}
+</code></pre>
+
+<ul>
+<li>Gate.java</li>
+</ul>
+
+<pre><code>public class Gate{
+    private int counter=0;
+    private String name=""Nobody;
+    private String address="Nowhere";
+    public void pass(String name,String address){
+        this.counter++;
+        this.name=name;
+        this.address=address;
+        check();
+    }
+
+    public String toString(){
+        return "No. "+counter+": "+name+", "+address;
+    }
+
+    private void check(){
+        if(name.chatAt(0)!=address.chatAt(0)){
+            System.out.println("*****BROKEN*****"+toString());
+        }
+    }
+}
+</code></pre>
+
+<ul>
+<li>UserThread.java</li>
+</ul>
+
+<pre><code>package com.jptiancai.thread;
+
+public class UserThread extends Thread {
+
+    //将不想被重复赋值的字段设置成final，是写程序的好习惯
+    private final Gate gate;
+    private String myname;
+    private String myaddress;
+
+    public UserThread(Gate gate, String myname, String myaddress) {
+        this.gate = gate;
+        this.myname = myname;
+        this.myaddress = myaddress;
+    }
+
+    public void run() {
+        System.out.println(myname + " BEGIN");
+        while (true) {
+            gate.pass(myname, myaddress);
+        }
+    }
+}
+</code></pre>
+
+<h2>使用Single Threaded Execution Pattern的范例</h2>
+
+<pre><code>public class Gate{
+    private int counter=0;
+    private String name=""Nobody;
+    private String address="Nowhere";
+    public synchronized void pass(String name,String address){
+        this.counter++;
+        this.name=name;
+        this.address=address;
+        check();
+    }
+
+    public synchronized String toString(){
+        return "No. "+counter+": "+name+", "+address;
+    }
+
+    private void check(){
+        if(name.chatAt(0)!=address.chatAt(0)){
+            System.out.println("*****BROKEN*****"+toString());
+        }
+    }
+}</code></pre>
+
+<h2>Single Threaded Execution Pattern所有参与者</h2>
+
+<ul>
+<li>SharedResource（共享资源）参与者</li>
+</ul>
+
+<p>Gate.java</p>
+
+<h2>适用性</h2>
+
+<ul>
+<li><p>多线程时</p>
+
+<p>单线程程序，并不需要使用Single Threaded Execution Pattern</p></li>
+<li>数据可被多个线程访问的时候</li>
+<li>状态可能变化的时候</li>
+<li>需要确保安全性的时候</li>
+</ul>
+
+<h2>缺点</h2>
+
+<ul>
+<li><p>可能会有发生死锁（deadlock）的危险
+所谓的死锁，是指两个线程分别获取了锁定，互相等待另一个线程接触锁定的现象。发生死锁时，哪个线程都无法继续执行下去，所以程序会失去生命性。</p></li>
+<li><p>性能低落</p>
+
+<ul><li>获取锁定要花时间</li>
+<li>线程冲突时必须等待</li></ul></li>
+</ul>
+
+<h2>知识点</h2>
+
+<ul>
+<li>set方法设置成synchronized,Gate类就不安全了</li>
+</ul>
+
+<pre><code>public synchronized void setNmae(String name){
+    this.name=name;
+}
+
+public synchronized void setAddress(String address){
+    this.address=address;
+}</code></pre>
+
+<p>因为Gate类，姓名跟出生地非得合在一起赋值不可。我们将pass方法设置成synchronized,也就是为了不要让多个线程穿插执行赋值的操作。然而，如果定义出setName、setAddress这样的方法，线程对字段赋值的操作就被分散了。要保护Gate来时，若不将字段合在一起保护，是没有意义的。</p>
+
+<ul>
+<li><p>所有可由多个线程共享，并会访问字段的方法都应该设置成synchronized加以保护</p></li>
+<li><p>long与double并不是原子的</p></li>
+</ul>
+
+<h2>练习问题</h2>
+
+<ul>
+<li>找到一个错误，可能需要调用pass方法100多万次。修改程序是错误更容易发生</li>
+</ul>
+
+<pre><code>public class Gate{
+    private int counter=0;
+    private String name=""Nobody;
+    private String address="Nowhere";
+    public void pass(String name,String address){
+        this.counter++;
+        this.name=name;
+        this.address=address;
+        //1.将线程暂停了1秒
+        //2.也可在临界区间中，调用出Thread类的yield方法，来促进线程的切换
+        try{
+            Thread.sleep(1000);
+        }catch(InterruptedExcetpion e){
+        }
+
+        check();
+    }
+
+    public String toString(){
+        return "No. "+counter+": "+name+", "+address;
+    }
+
+    private void check(){
+        if(name.chatAt(0)!=address.chatAt(0)){
+            System.out.println("*****BROKEN*****"+toString());
+        }
+    }
+}
+</code></pre>
+
+<ul>
+<li>确认安全性</li>
+</ul>
+
+<pre><code>public class SecurityGate(){
+    private int counter;
+    private void enter(){
+        counter++;
+    }
+
+    public void exit(){
+        counter--;
+    }
+
+    public int getCounter(){
+        return counter;
+    }
+}   </code></pre>
+
+<p>要将enter方法与exit方法设为synchronized的理由我想各位已经了解了。</p>
+
+<p>将getCounter设为synchronized的理由又是为何呢？
+如果没有将getCounter方法设为synchronized或未将counter字段设为volatile时，其他线程不管怎样更改counter的值，都只是对工作内存（woking memory）进行操作而已，而不见得会反映到主保存器（main memory）</p>
+
+<ul>
+<li><p>避免死锁的发生</p>
+
+<ul><li>Main.java</li></ul></li>
+</ul>
+
+<pre><code>public class Main{
+    System.ouy.println("Testing EaterThread, hit CTRL+C to exit.");
+
+    Tool spoon=new Tool("Spoon");
+    Tool spoon=new Tool("Fork");
+
+    new EaterThread("Alice",spoon,fork).start();
+    new EaterThread("Bobby",fork,spoon).start();
+}</code></pre>
+
+<ul>
+<li>Tool.java</li>
+</ul>
+
+<pre><code>public Class Tool{
+    private final String name;
+    public Tool(String name){
+        this.name=name;
+    }
+
+    public String toString(){
+        return "[ "+name+" ]";
+    }
+}</code></pre>
+
+<ul>
+<li>EaterThread.java</li>
+</ul>
+
+<pre><code>public Class EaterThread{
+    private String name;
+    private final Tool lefthand;
+    private final Tool righthand;
+
+    public EaterThread(String name,Tool lefthand,Tool righthand){
+        this.name=name;
+        this.lefthand=lefthand;
+        this.righthand=righthand;
+    }
+
+    public void run(){
+        while(true){
+            eat();
+        }
+    }
+
+    public void eat(){
+        synchronized(lefthand){
+            System.out.println(name +" takes up "+lefthand+" (left).");
+        synchronized(righthand){
+            System.out.println(name +" takes up "+righthand+" (right).");
+            System.out.println(name +" is eating now,yam yam!");
+            System.out.println(name +" puts down "+ righthand+" (right).");
+
+        }
+            System.out.println(name +" puts down"+lefthand+" (left).");
+
+        }
+    }
+}</code></pre>
+
+<blockquote>
+  <p>正常情况打印：</p>
+</blockquote>
+
+<pre><code>Bobby takes up [ Fork ] (left).
+Bobby takes up [ Spoon ] (right).
+Bobby is eating now,yam yam!
+Bobby puts down [ Spoon ] (right).
+Bobby puts down [ Fork ] (left).</code></pre>
+
+<blockquote>
+  <p>出现死锁的情况：</p>
+</blockquote>
+
+<pre><code>Alice takes up [ Spoon ] (left).
+Bobby takes up [ Fork ] (left).</code></pre>
+
+<p>方法1：Alice 和Bobby以相同的顺序拿餐具</p>
+
+<pre><code>public class Main{
+    System.ouy.println("Testing EaterThread, hit CTRL+C to exit.");
+
+    Tool spoon=new Tool("Spoon");
+    Tool spoon=new Tool("Fork");
+
+    //这样一来SharedResource角色为对称这个条件就不成立了
+    new EaterThread("Alice",fork,spoon).start();
+    new EaterThread("Bobby",fork,spoon).start();
+}
+</code></pre>
+
+<p>方法2： 取得“汤匙和叉子”配对的方法</p>
+
+<pre><code>public class Main{
+    System.ouy.println("Testing EaterThread, hit CTRL+C to exit.");
+
+    Tool spoon=new Tool("Spoon");
+    Tool spoon=new Tool("Fork");
+
+    //用pair代替spoon和fork，看成一个整体
+    Pair pair =new Pair(spoon,fork);
+    new EaterThread("Alice",pair).start();
+    new EaterThread("Bobby",pair).start();
+}</code></pre>
+
+<pre><code>public Class EaterThread{
+    private String name;
+    private final Pair pair;
+
+    public EaterThread(String name,Pair pair){
+        this.name=name;
+        this.pair=pair;
+    }
+
+    public void run(){
+        while(true){
+            eat();
+        }
+    }
+
+    public void eat(){
+        synchronized(pair){
+            System.out.println(name +" takes up "+pair+" .");
+            System.out.println(name +" is eating now, yam yam!");
+            System.out.println(name +" puts down"+pair +" .");
+
+        }
+    }
+}</code></pre>
+
+<pre><code>public Class Pair{
+    private final Tool lefthand;
+    private final Tool righthand;
+
+    public Pair(Tool lefthand,Tool righthand){
+        this.lefthand=lefthand;
+        this.righthand=righthand;   
+    }
+
+    public String toString(){
+        return " [ "+lefthand+" and "+righthand+" ] ";
+    }
+
+}</code></pre>
+
+<ul>
+<li><p>创建 mutex,互斥来代替synchronized</p>
+
+<ul><li>Gate.java</li></ul></li>
+</ul>
+
+<pre><code>public class Gate{
+    private int counter=0;
+    private String name=""Nobody;
+    private String address="Nowhere";
+    public void pass(String name,String address){
+        mutex.lock();
+        try{
+            this.counter++;
+            this.name=name;
+            this.address=address;
+
+            check();
+        }finally{
+            mutex.unlock();
+        }
+    }
+
+    public String toString(){
+        String s=null;
+        mutex.lock();
+        try{
+            s="No. "+counter+": "+name+", "+address;
+        }finally{
+            mutex.unlock();
+        }
+        return s;
+    }
+
+    private void check(){
+        if(name.chatAt(0)!=address.chatAt(0)){
+            System.out.println("*****BROKEN*****"+toString());
+        }
+    }
+}</code></pre>
+
+<p><strong>下面是创建的mutex 类，用来进行共享互斥的机制，mutual exclusion（互斥）的简称</strong></p>
+
+<pre><code>//单纯的mutex,会存在两个问题
+//1.如果某个线程连续两次调用lock方法，调用后，在第2次的调用时，由于busy字段已经变成true，因此会一直wait，这就好像自己把自己所在外面，进不了门的意思（很形象啊！）
+//2.即使是尚未调用出lock方法的线程，也会变成可以调用unlock方法，就好比即使不是自己上的锁，自己还是可以将门打开一样。
+public class Mutex{
+    private boolean busy=false;
+
+    public synchronized void lock(){
+        while(busy){
+            try{
+                wait();
+            }catch(InterruptedExcetpion e){}
+        }
+
+        busy=true;
+    }
+
+    public synchronized void unlock(){
+        busy=false;
+        notifyAll();
+    }
+
+}</code></pre>
+
+<pre><code>//改良后的mutex类的unlock方法中，如果unlock太多次，或是将没有lock住的线程进行unlock时，就会马上return。这个部分应该可以抛出异常，返回错误值，可以用assert关键字写此时间点应该成立的条件
+public class Mutex{
+    private long locks=0;
+    private Thread owner=null;
+
+    public synchronized void lock(){
+        Thread me=Thread.currentThread();
+        while(locks&gt;0&amp;&amp;owner!=me){
+            try{
+                wait();
+            }catch(InterruptedExcetpion e){}
+        }
+        //locks==0||owner==me lock是数为0，或者自己已锁住了
+        owner=me;
+        locks++;
+
+    }
+
+    public synchronized void unlock(){
+        Thread me=Thread.currentThread();
+        if(locks==0||owner=!me){
+            return;
+        }
+        //locks&gt;0 &amp;&amp; owner==me lock是数大于0，或者自己已锁住了
+        locks--;
+        if(locks==0){
+            owner=null;
+            notifyAll();
+        }
+
+    }
+
+}</code></pre>
+<script type='text/javascript'>
+$(document).ready(function(){
+  if($('code').length>0){
+    $('code').parent().addClass('prettyprint linenums');
+    prettyPrint();
+};
+});
+</script>
+</body>
+</html>

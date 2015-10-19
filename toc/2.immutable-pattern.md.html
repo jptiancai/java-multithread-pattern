@@ -1,0 +1,166 @@
+﻿<!doctype html public '-//W3C//DTD HTML 4.0 Transitional //EN'>
+<html>
+<head>
+<title>2.immutable-pattern</title>
+<meta charset='UTF-8' />
+<meta name='generator' content='EverEdit' />
+<link href='E:\EverEdit\mode\markdown\default.css' rel='stylesheet'></link>
+<link href='E:\EverEdit\mode\markdown\prettify.css' rel='stylesheet'></link>
+<script type='text/javascript' src='E:\EverEdit\mode\markdown\prettify.js'></script>
+<script type='text/javascript' src='E:\EverEdit\mode\markdown\jquery-1.10.2.min.js'></script>
+<script type='text/javascript' src='E:\EverEdit\mode\markdown\toc.js'></script>
+</head>
+<body>
+<div id='generated-toc'></div>
+<h2>概念</h2>
+
+<p>String类并没有提供任何改变字符串属性的方法，也就是说String实例所代表的字符串属性，绝对不会改变。</p>
+
+<p>因为如此，String类的方法，都不需要synchronized。无论有多少线程如何对String访问，因为实例的内部状态不会改变，所以线程并不需要考虑共享互斥。</p>
+
+<p>这就是要学习的Immutable Pattern</p>
+
+<p>在Immutable Pattern中，有着能够保证实例状态绝不会改变的类（Immutable类）。因为访问这个实例时，可以省去使用共享互斥机制所会浪费的时间，故若能妥善运用，将能提高程序的性能。</p>
+
+<blockquote>
+  <p>除了学习本章以外，可以参考String的源码</p>
+</blockquote>
+
+<h2>使用Immutable Pattern的Person类</h2>
+
+<ul>
+<li><p>Person.java</p>
+
+<ul><li>没有定义setName这类用来改变字段的方法，这样即使有多个线程同时访问相同实例，Person类也是安全的。</li>
+<li>Person类被声明称final，Person类不允许别人定义它的子类（不是必要条件，而是预防子类擅自修改字段值的安全措施）</li>
+<li>Person类的字段name与address的访问权限都是private，都声明成final（不是必要条件，而是预防可以明确表达程序员的意图，就算不小心写了置顶的程序代码，编译器会替我们找出错误）</li></ul></li>
+</ul>
+
+<pre><code>public final class Person{
+    private final String name;
+    private final String address;
+    public Person(String name,String address){
+        this.name=name;
+        this.address=address;
+    }
+
+    public String getName(){
+        return name;
+    }
+
+    public String getAddress(){
+        return address;
+    }
+
+    public String toString(){
+        return "[ person : name = "+name+", address = "+address+" ]";
+    }
+}</code></pre>
+
+<ul>
+<li>Main.java</li>
+</ul>
+
+<pre><code>public class Main{
+    Person alice=New Person("Alice","Alaska");
+    new PrintPersonThread(alice).start();
+    new PrintPersonThread(alice).start();
+    new PrintPersonThread(alice).start();
+}</code></pre>
+
+<ul>
+<li>PrintPersonThread.java</li>
+</ul>
+
+<pre><code>public class PrintPersonThread extends Thread{
+    private Person person;
+    public PrintPersonThread(Person person){
+        this.person=person;
+    }
+
+    public void run(){
+        while(true){
+            Sysytem.out.println(Thread.currntThread().getName()+" prints "+person);
+        }
+
+    }
+}</code></pre>
+
+<h2>Immutable Pattern的所有参与者</h2>
+
+<ul>
+<li>Immutable(不变的)参与者，Person类就是</li>
+</ul>
+
+<h2>适用性</h2>
+
+<ul>
+<li>当实例阐释后，状态不再变化时</li>
+<li>实例需要共享，而且访问很频繁时，使用Immutable Pattern 的有点，在于“不需要使用synchronized保护”。不需要使用synchronized来保护最大的有点就是可在不丧失安全性与生命性的前提下，提高程序的执行性能。</li>
+</ul>
+
+<h2>知识点</h2>
+
+<ul>
+<li>Java的标准类链接库里，就具有成对的mutable类与Immutable类。StringBuffer类用来表示字符串的mutab类，StringBuffer所表示的字符串可以自由的修改。威客确保写是的安全性，进行改写操作时，都有适当地使用synchronized加以保护。而String则是用来表示字符串的Immutable类。String实例所表示的字符串无法做任何修改。所有对String类进行操作的方法都不是synchronized，所以引用的速度回比较快（要由多个字符串建立出新的字符串，StringBuffer类的速度会比String类快）</li>
+<li><p>java标准库链接中使用的Immutable Pattern</p>
+
+<ul><li><p>除上面java.lang.String类外，还有java.lang.Integer这些基本类型的包装类都是Immutable类</p></li>
+<li><p>表示颜色的java.lang.Color类是Immutable类</p></li>
+<li>java.awt.point类不是Immutable类，虽然没有set开头的方法名称，但是有move这类的方法。</li></ul></li>
+</ul>
+
+<h2>练习问题</h2>
+
+<ul>
+<li>没有setter方法，却不是Immutable</li>
+</ul>
+
+<pre><code>public final class UserInfo{
+    private final StringBuffer info;
+    public UserInfo(String name,String address){
+        this.info=new StringBuffer("&lt;info name=\""+name+"\"address=\""+address+"\" /&gt;");
+    }
+
+    public StringBuffer getInfo(){
+        return info;
+    }
+
+    public String toString(){
+        return "[ UserInfo: "+info+ ]";
+    }
+}</code></pre>
+
+<p><strong>改变UserInfo状态的Main类</strong></p>
+
+<pre><code>public class Main{
+    public static void main(String [] args){
+        //建立实例
+        UserInfo userInfo=new UserInfo("Alice","Alaska");
+
+        //显示
+        System.out.println("userinfo = "+userinfo);
+
+        //更改状态
+        StringBuffer info=userinfo.getInfo();
+        info.replace(12,17,"Bobby");//12..16是“Alice”的位置
+
+        //再度显示
+        Sysytem.out.println("userinfo = "+userinfo);
+    }
+}</code></pre>
+
+<p>输出：</p>
+
+<pre><code>userinfo = [ UserInfo :&lt;info name="Alice" adddress="Alaska" /&gt;]
+userinfo = [ UserInfo :&lt;info name="Bobby" adddress="Alaska" /&gt;]</code></pre>
+<script type='text/javascript'>
+$(document).ready(function(){
+  if($('code').length>0){
+    $('code').parent().addClass('prettyprint linenums');
+    prettyPrint();
+};
+});
+</script>
+</body>
+</html>
