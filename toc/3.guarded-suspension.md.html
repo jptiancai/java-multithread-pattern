@@ -1,0 +1,468 @@
+﻿<!doctype html public '-//W3C//DTD HTML 4.0 Transitional //EN'>
+<html>
+<head>
+<title>3.guarded-suspension</title>
+<meta charset='UTF-8' />
+<meta name='generator' content='EverEdit' />
+<link href='E:\EverEdit\mode\markdown\default.css' rel='stylesheet'></link>
+<link href='E:\EverEdit\mode\markdown\prettify.css' rel='stylesheet'></link>
+<script type='text/javascript' src='E:\EverEdit\mode\markdown\prettify.js'></script>
+<script type='text/javascript' src='E:\EverEdit\mode\markdown\jquery-1.10.2.min.js'></script>
+<script type='text/javascript' src='E:\EverEdit\mode\markdown\toc.js'></script>
+</head>
+<body>
+<div id='generated-toc'></div>
+<h2>概念</h2>
+
+<p>Guarded是“被保护着的”、“被防卫着的”意思，suspension则是“暂停”的意思。当现在并不适合马上执行某个操作时，就要求想要执行该操作的线程等待。</p>
+
+<p>Guarded Suspension Pattern 会要求线程等待，以保证实例的安全性。正如同我们请快递员在门外等候，以保障自己的隐私权一样。</p>
+
+<h2>实例</h2>
+
+<ul>
+<li>Request.java</li>
+</ul>
+
+<pre><code>public class Request{
+    private final String name;
+
+    pubic Request(String name){
+        this.name=name;
+    }
+
+    public String getName(){
+        return name;
+    }
+
+    public String toString(){
+        return "[ Request "+name+" ]";
+    }
+}</code></pre>
+
+<ul>
+<li><p>RequestQueue.java</p>
+
+<ul><li>getRequest,putRequest都是synchronized方法；</li>
+<li>getRequest的前面有while语句，用来测试条件是否成立；</li>
+<li>在while的块中会调用wait；</li>
+<li>在while语句之后，才进行实例想做的处理（removeFirst）</li>
+<li>在putRequest里，要调用notifyAll</li></ul></li>
+</ul>
+
+<pre><code>import java.util.LinkedList;
+
+public class RequestQueue{
+    private final LinkedList queue=new LinkedList();
+
+    public synchronized Request getRequest(){
+        while(queue.size&lt;=0){
+            try{
+            System.out.println(Thread.getCurrentThread.getName()+": wait() begins, queue = "+queue);
+                //线程真正所等待的，是实例状态的变化，等待着警戒条件（queue.size&gt;0）的成立
+                //只有收到notify/notifyAll,才能继续执行后面的语句
+                wait();
+            System.out.println(Thread.getCurrentThread.getName()+": wait() ends, queue = "+queue);
+            }catch(InterruptedException e){
+
+            }
+        }
+        return (Request)queue.removeFirst();
+    }
+
+    public synchronized void putRequest(Request request){
+        System.out.println(Thread.getCurrentThread.getName()+": notifyAll() begins, queue = "+queue);
+        queue.addLast(request);
+        notifyAll();
+        System.out.println(Thread.getCurrentThread.getName()+": notifyAll() ends, queue = "+queue);
+    }
+
+}</code></pre>
+
+<ul>
+<li>ClientThread.java</li>
+</ul>
+
+<pre><code>import java.util.Random;
+
+public class ClientThread extends Thread{
+    private Random random;
+    private RequestQueue requestQueue;
+
+    public ClientThread(RequestQueue requestQueue,String name,long seed){
+        super(name);
+        this.requestQueue=requestQueue;
+        this.random=new Random(seed);
+    }
+
+    public void run(){
+        for(int i=0;i&lt;10000;i++){
+            Request request=new Request("No."+ i);
+            System.out.println(Thread.getCurrentThread.getName()+" requests "+request);
+            requestQueue.putRequest(request);
+            try{
+                Thread.sleep(random.netInt(1000));
+            }catch(InterruptedException e){
+
+            }
+        }
+    }
+}</code></pre>
+
+<ul>
+<li>ServerThread.java</li>
+</ul>
+
+<pre><code>import java.util.Random;
+public class ServerThread extends Thread{
+    private Random random;
+    private RequestQueue requestQueue;
+    public ServerThread(RequestQueue requestQueue,String name,long seed){
+        super(name);
+        this.requestQueue=requestQueue;
+        this.random=new Random(seed);
+    }
+
+    public void run(){
+        for(int i=0;i&lt;10000;i++){
+            Request request=requestQueue.getRequest();
+            System.out.println(Thread.getCurrentThread.getName()+" handles "+request);
+
+            try{
+                Thread.sleep(random.netInt(1000));
+            }catch(InterruptedException e){
+
+            }
+        }
+    }
+}</code></pre>
+
+<ul>
+<li>Main.java</li>
+</ul>
+
+<pre><code>public class Main{
+    public static void main(String []args){
+        RequestQueue requestQueue=new RequestQueue();
+        new ClientThread(requestQueue,"Alice",3141592L).start();
+        new ServerThread(requestQueue,"Bobby",6535897L).start();
+    }
+}</code></pre>
+
+<h2>Guarded Suspension Pattern的所有参与者</h2>
+
+<ul>
+<li>GuardedObject（被防卫的对象） 参与者
+java语言中，是使用while语句与wait方法来实现guaredMethod的。而是用notify/notifyAll方法来实现stateChangingMethod</li>
+</ul>
+
+<p>在范例程序中，RequestQueue类就是GuardedObject参与者。
+getRequest方法与putRequest方法则分别是guardedMethod与stateChangingMethod</p>
+
+<ul>
+<li>上面说的结构稍加整理</li>
+</ul>
+
+<pre><code>while(“警戒条件”的逻辑否定){
+    使用wait等待；
+}
+进行目的操作</code></pre>
+
+<h2>练习问题</h2>
+
+<ul>
+<li><p>似是而非的Guarded Suspension Pattern,这也是学习中最忌讳的想法
+上面的范例程序中，RequestQueue类的getRequest方法写成下面4个版本，各会出现什么问题。</p>
+
+<ul><li>把while写成if</li></ul></li>
+</ul>
+
+<pre><code>public synchronized Request getRequest(){
+        if(queue.size&lt;=0){
+            try{
+                wait();
+            }catch(InterruptedException e){
+
+            }
+
+        }
+        return (Request)queue.removeFirst();
+}
+
+</code></pre>
+
+<blockquote>
+  <p>假设有好几个线程会全部开始运行。如果这是queue.size()的值是1，那么开始运行的第一个线程在调用处queue.removeFirst()后，queue.size()的值会变成0.结果，解释queue.size()的值是0，开始运行的第二个线程还是会调用出queue.removeFirst().使用这个类恐怕有安全上的问题。</p>
+</blockquote>
+
+<p>Guarded Suspension模式要使用while，来“以条件保护（Guard）”，notify/notifyAll不过是去检查条件的一个关键点。</p>
+
+<ul>
+<li>synchronized的范围只有wait</li>
+</ul>
+
+<pre><code>public Request getRequest(){
+        while(queue.size&lt;=0){
+            try{
+                synchronized(this){
+                    wait();
+                }
+            }catch(InterruptedException e){
+
+            }
+
+        }
+        return (Request)queue.removeFirst();
+}
+
+</code></pre>
+
+<blockquote>
+  <p>queue.size()的值为1时，有两个线程都执行的会，有一个线程会收到NoSushElementException。而且原来queue字段的LinkedList类就不是线程安全。使用这个类安全性降低。</p>
+</blockquote>
+
+<ul>
+<li>try&#8230;catch 放在while的外面</li>
+</ul>
+
+<pre><code>public synchronized Request getRequest(){
+    try{
+        while(queue.size&lt;=0){
+                wait(); 
+        }
+        }catch(InterruptedException e){
+
+        }
+        return (Request)queue.removeFirst();
+}</code></pre>
+
+<blockquote>
+  <p>线程在wait时，如果其他线程调用interrupt方法，即使Guard条件没有被满足，这个线程还是会从while语句调到catch节，而调用removeFirst。也就是说没有办法等到Guard条件被满足。会跳过Guard条件</p>
+</blockquote>
+
+<ul>
+<li>以Thread.sleep取代wait </li>
+</ul>
+
+<pre><code>public synchronized Request getRequest(){
+        while(queue.size&lt;=0){
+            try{
+                Thread.sleep(1000);
+            }catch(InterruptedException e){
+
+            }
+
+        }
+        return (Request)queue.removeFirst();
+}</code></pre>
+
+<blockquote>
+  <p>问题不在于性能，而是在于生存性。wait与Thread.sleep不同，执行wait的线程会释放实例的锁定，但是Thread.sleep则不会。因此，在getRequest这个synchronized方法中执行Thread.sleep其他线程也无法进入到putRequest方法或getRequest方法中（会自己block起来）。因为无法进入putRequest方法，因此queue.size的值永远都是0，Guard条件永远不会满足。而原来sleep的线程每100毫秒醒来一次来对Guard条件做测试。但是Guard条件为假，所以线程会再沉睡下去。线程就一直重复“醒来->测试->再睡下去”，而在此当中一直想执行putRequest或getRequest的其他线程则会全部block住。
+  约100毫秒一次Guard条件的线程并不会停止处理。不过，也由于只是不断定期测试Guard条件而已，处理无法有所进展。像这样，虽然在运行，但是实际上只是在原地踏步的情况，我们称之为livelock。</p>
+</blockquote>
+
+<ul>
+<li><p>发生死锁了怎么办？</p>
+
+<ul><li>TalkThread.java</li></ul></li>
+</ul>
+
+<pre><code>import java.util.Random;
+public class TalkThread extends Thread{
+    private RequestQueue requestQueue;
+    public TalkThread(RequestQueue requestQueue,String name,long seed){
+        super(name);
+        this.requestQueue=requestQueue;
+        this.random=new Random(seed);
+    }
+
+    public void run(){
+    System.out.println(Thread.getCurrentThread.getName()+":BEGIN);
+        for(int i=0;i&lt;20;i++){
+        //获取对方的请求
+            Request request1=requestQueue.getRequest();
+            System.out.println(Thread.getCurrentThread.getName()+" gets "+request1);
+        //加上1个惊叹号！，传给对方
+        Request request2=new Request(request1.getName()+"!");
+        System.out.println(Thread.getCurrentThread.getName()+" puts "+request2);
+            output.putRequest(request2);
+        }
+    System.out.println(Thread.getCurrentThread.getName()+":END);
+    }
+}</code></pre>
+
+<ul>
+<li>Main.java</li>
+</ul>
+
+<pre><code>public class Main{
+    public static void main(String []args){
+        RequestQueue requestQueue1=new RequestQueue();
+        RequestQueue requestQueue2=new RequestQueue();
+        //Alice 在getRequest中等待Bobby的Request而wait
+        //Bobby 在getRequest中等待Alice的Request而wait
+        //这样一来就发生了死锁，解决方法可以在requestQueue1将为“Hello”
+        //的请求予以putRequest,这就是所谓的“种”。
+        //Alice会在第一个getRequest就得到这个请求
+        requestQueue1.putRequest(new Request("Hello"));
+        new TalkThread(requestQueue1,requestQueue2,"Alice").start();
+        new TalkThread(requestQueue2,requestQueue1,"Bobby").start();
+    }
+}</code></pre>
+
+<ul>
+<li><p>线程无法停止？</p></li>
+<li><p>ClientThread.java</p></li>
+</ul>
+
+<pre><code>import java.util.Random;
+
+public class ClientThread extends Thread{
+    private Random random;
+    private RequestQueue requestQueue;
+
+    public ClientThread(RequestQueue requestQueue,String name,long seed){
+        super(name);
+        this.requestQueue=requestQueue;
+        this.random=new Random(seed);
+    }
+
+    public void run(){
+    //在InterruptedException被抛出后，就跳出for语句之外。
+    try{
+        for(int i=0;i&lt;10000;i++){
+            Request request=new Request("No."+ i);
+            System.out.println(Thread.getCurrentThread.getName()+" requests "+request);
+            requestQueue.putRequest(request);
+            Thread.sleep(random.netInt(1000));
+                    }
+    }
+    }catch(InterruptedException e){
+
+            }
+}</code></pre>
+
+<ul>
+<li>ServerThread.java</li>
+</ul>
+
+<pre><code>import java.util.Random;
+public class ServerThread extends Thread{
+    private Random random;
+    private RequestQueue requestQueue;
+    public ServerThread(RequestQueue requestQueue,String name,long seed){
+        super(name);
+        this.requestQueue=requestQueue;
+        this.random=new Random(seed);
+    }
+
+    public void run(){
+    try{
+        for(int i=0;i&lt;10000;i++){
+            Request request=requestQueue.getRequest();
+            System.out.println(Thread.getCurrentThread.getName()+" handles "+request);
+                Thread.sleep(random.netInt(1000));
+            }
+        }catch(InterruptedException e){
+
+            }
+    }
+}</code></pre>
+
+<ul>
+<li>Main.java</li>
+</ul>
+
+<pre><code>//这个程序若不适用Ctrl+C强制结束，到程序执行完毕需要花上很长的时间
+public class Main{
+    public static void main(String []args){
+    //启动线程
+        RequestQueue requestQueue=new RequestQueue();
+        Thread alice=new ClientThread(requestQueue,"Alice",3141592L);
+        Thread bobby=new ServerThread(requestQueue,"Bobby",6535897L);
+    alice.start();
+    bobby.start();
+
+    //等待约10秒
+    try{
+        Thread.sleep(10000);
+    }catch(InterruptedException e){
+
+    }
+
+    //调用interrupt方法，线程还是不停下来，是因为sleep方法与wait方在调用时，没有顾虑到异常InterruptedException的缘故。
+
+    System.out.println("***** calling interrupt *****");
+    alice.interrupt();
+    bobby.interrupt();
+    }
+}</code></pre>
+
+<ul>
+<li>Request.java</li>
+</ul>
+
+<pre><code>public class Request{
+    private final String name;
+
+    pubic Request(String name){
+        this.name=name;
+    }
+
+    public String getName(){
+        return name;
+    }
+
+    public String toString(){
+        return "[ Request "+name+" ]";
+    }
+}</code></pre>
+
+<ul>
+<li><p>RequestQueue.java</p>
+
+<ul><li>getRequest,putRequest都是synchronized方法；</li>
+<li>getRequest的前面有while语句，用来测试条件是否成立；</li>
+<li>在while的块中会调用wait；</li>
+<li>在while语句之后，才进行实例想做的处理（removeFirst）</li>
+<li>在putRequest里，要调用notifyAll</li></ul></li>
+</ul>
+
+<pre><code>import java.util.LinkedList;
+
+public class RequestQueue{
+    private final LinkedList queue=new LinkedList();
+
+    public synchronized Request getRequest()throws InterruptedException{
+        while(queue.size&lt;=0){
+            try{
+            System.out.println(Thread.getCurrentThread.getName()+": wait() begins, queue = "+queue);
+                //线程真正所等待的，是实例状态的变化，等待着警戒条件（queue.size&gt;0）的成立
+                //只有收到notify/notifyAll,才能继续执行后面的语句
+                wait();
+            System.out.println(Thread.getCurrentThread.getName()+": wait() ends, queue = "+queue);
+            }catch(InterruptedException e){
+
+            }
+        }
+        return (Request)queue.removeFirst();
+    }
+
+    public synchronized void putRequest(Request request){
+        System.out.println(Thread.getCurrentThread.getName()+": notifyAll() begins, queue = "+queue);
+        queue.addLast(request);
+        notifyAll();
+        System.out.println(Thread.getCurrentThread.getName()+": notifyAll() ends, queue = "+queue);
+    }
+
+}</code></pre>
+<script type='text/javascript'>
+$(document).ready(function(){
+  if($('code').length>0){
+    $('code').parent().addClass('prettyprint linenums');
+    prettyPrint();
+};
+});
+</script>
+</body>
+</html>
