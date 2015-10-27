@@ -14,7 +14,161 @@
 <div id='generated-toc'></div>
 <h2>概念</h2>
 
+<p>当现在不适合进行这个操作，或是没有必要进行这个操作时，就直接放弃进行这个操作而回去，这就是Balking Pattern。</p>
+
+<p>在Balking Pattern中，当警戒条件不成立时，就马上中断。
+而Guarded Suspension Pattern则是等待到可以执行时，再去执行相应的操作。</p>
+
+<h2>实例</h2>
+
+<p>以下程序演示为文本处理软件的“自动保存功能”的超级简化版</p>
+
+<ul>
+<li>Data.java</li>
+</ul>
+
+<p>表示可修改、可保存的数据的类</p>
+
+<pre><code>import java.io.IOException;
+import java.io.FileWriter;
+import java.io.Writer;
+
+public class Data{
+    private final String filename;//保存时的文件名
+    private String content;//数据的内容
+    private boolean changed;//修改后的内容还没保存的话，值为true
+
+    public Data(String filename,String content){
+        this.filename=filename;
+        this.content=content;
+        this.changed=true;
+    }
+
+    //修改数据内容
+    public synchronized void change(String newContent){
+        content=newContent;
+        changed=true;
+    }
+
+    //若数据有修改，就保存到文件里
+    public synchronized void save() throws IOException{
+        if(!changed){
+            return;
+        }
+        doSave();
+        changed=false;
+    }
+
+    //实际将数据保存到文件里用的方法
+    private void doSave() throws IOException{
+        System.out.println(Thread.getCurrentThread().getName()+" calls doSave, content = "+content);
+        Writer writer=new FileWriter(filename);
+        writer.write(content);
+        writer.close();
+    }
+}</code></pre>
+
+<ul>
+<li>SaverThread.java</li>
+</ul>
+
+<p>定期保存数据的类</p>
+
+<pre><code>import java.io.IOException;
+
+public class SaverThread extends Thread{
+    private Data data;
+    public SaverThread(String name,Data data){
+        super(name);
+        this.data=data;
+    }
+
+    public void run(){
+        try{
+            while(true){
+                data.save();//保存数据
+                Thread.sleep(1000);//休息约1秒
+            }
+        }catch(IOException e){
+            e.printStackTrace();
+        }catch(InterruptedException e){
+            e.printStackTrace();
+        }
+    }
+}
+</code></pre>
+
+<ul>
+<li>ChangerThread.java</li>
+</ul>
+
+<p>用来修改、保存数据属性的类</p>
+
+<pre><code>import java.io.IOException;
+import java.util.Random;
+
+public class ChangerThread extends Thread{
+    private Data data;
+    private Random random=new Random();
+
+    public ChangerThread(String name,Data data){
+        super(name);
+        this.data=data;
+    }  
+
+    public void run(){
+        try{
+            for(int i=0;true;i++){
+                data.change("No."+i);//修改数据
+                Thread.sleep(random.nextInt(1000));//模拟去做别的事
+                data.save();//明确的要求存档
+            }
+        }catch(IOException e){
+            e.printStackTrace();
+        }catch(InterruptedException e){
+            e.printStackTrace();
+        }
+    }
+}</code></pre>
+
+<ul>
+<li>Main.java</li>
+</ul>
+
+<p>用来测试的类</p>
+
+<pre><code>public class Main{
+    public static void main(String[] args){
+        Data data=new Data("data.txt","(empty)");
+        new ChangerThread("ChangerThread",data).start;
+        new SaverThread("SaverThread",data).start;
+    }
+}
+</code></pre>
+
+<h2>Balking Pattern的所有参与者</h2>
+
+<ul>
+<li>GuardedObject（被警戒的对象）参与者</li>
+</ul>
+
+<p>Data类就是GuardedObject参与者，save方法与change方法则分别是guardedMethod与stateChangingMethod</p>
+
+<p>警戒条件则是“changed字段的值为true”</p>
+
 <h2>适用性</h2>
+
+<ul>
+<li>不需要刻意去执行的时候</li>
+</ul>
+
+<p>当content字段的内容没有改变，就在save方法里balk住了。
+balk的原因是content的内容已经写在文件里了，没有必要大费工夫再去写一次，是为了提高程序的执行性能。</p>
+
+<ul>
+<li>不想等待警戒条件成立时</li>
+<li>警戒条件只有第一次成立时</li>
+</ul>
 
 <h2>缺点</h2>
 
