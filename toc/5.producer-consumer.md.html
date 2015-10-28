@@ -1,0 +1,41 @@
+﻿<!doctype html public '-//W3C//DTD HTML 4.0 Transitional //EN'>
+<html>
+<head>
+<title>5.producer-consumer</title>
+<meta charset='UTF-8' />
+<meta name='generator' content='EverEdit' />
+<link href='E:\EverEdit\mode\markdown\default.css' rel='stylesheet'></link>
+<link href='E:\EverEdit\mode\markdown\prettify.css' rel='stylesheet'></link>
+<script type='text/javascript' src='E:\EverEdit\mode\markdown\prettify.js'></script>
+<script type='text/javascript' src='E:\EverEdit\mode\markdown\jquery-1.10.2.min.js'></script>
+<script type='text/javascript' src='E:\EverEdit\mode\markdown\toc.js'></script>
+</head>
+<body>
+<div id='generated-toc'></div>
+<h2>概念</h2>
+
+<p>生产者必须将数据安全地交给消费者。虽然只是这样的问题，但当生产者与消费者在不同线程上运行时，两者的处理速度差将是最大的问题。</p>
+
+<p>当消费者要取数据时生产者还没建立出数据，或是生产者建立出数据时消费者的状态还没办法接受数据等等。</p>
+
+<p>Producer-Consumer Pattern 是在生产者与消费者之间加入一个“桥梁参与者”。以这个桥梁参与者缓冲线程之间的处理速度差。</p>
+
+<h2>范例</h2>
+
+<h2>适用性</h2>
+
+<h2>缺点</h2>
+
+<h2>知识点</h2>
+
+<h2>练习问题</h2>
+<script type='text/javascript'>
+$(document).ready(function(){
+  if($('code').length>0){
+    $('code').parent().addClass('prettyprint linenums');
+    prettyPrint();
+};
+});
+</script>
+</body>
+</html>
