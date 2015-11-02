@@ -127,7 +127,9 @@ public class EaterThread extends Thread {
         System.out.println(Thread.currentThread().getName() + " puts " + cake);
         //以桌上可以摆的数量上限，减掉现在已经摆的个数,剩下的就是可以摆放蛋糕的空间，得到的值必须大于0
         while (count &gt;= buffer.length) {
+        System.out.println(Thread.currentThread().getName() + " wait BEGIN");
             wait();
+        System.out.println(Thread.currentThread().getName() + " wait END");
         }
         buffer[tail] = cake;
         //等价于下面三行，如果超过buffer的长度，就回到0
@@ -145,7 +147,9 @@ public class EaterThread extends Thread {
     public synchronized String take() throws InterruptedException {
         //蛋糕至少有1个
         while (count &lt;= 0) {
+        System.out.println(Thread.currentThread().getName() + " wait BEGIN");
             wait();
+            System.out.println(Thread.currentThread().getName() + " wait END");
         }
         String cake = buffer[head];
         head = (head + 1) % buffer.length;
