@@ -1,0 +1,265 @@
+﻿<!doctype html public '-//W3C//DTD HTML 4.0 Transitional //EN'>
+<html>
+<head>
+<title>6.read-write-lock</title>
+<meta charset='UTF-8' />
+<meta name='generator' content='EverEdit' />
+<link href='E:\EverEdit\mode\markdown\default.css' rel='stylesheet'></link>
+<link href='E:\EverEdit\mode\markdown\prettify.css' rel='stylesheet'></link>
+<script type='text/javascript' src='E:\EverEdit\mode\markdown\prettify.js'></script>
+<script type='text/javascript' src='E:\EverEdit\mode\markdown\jquery-1.10.2.min.js'></script>
+<script type='text/javascript' src='E:\EverEdit\mode\markdown\toc.js'></script>
+</head>
+<body>
+<div id='generated-toc'></div>
+<h2>概念</h2>
+
+<p>Read-Write Lock Pattern 将读取与写入分开来处理。在读取数据之前，必须获取用来读取的锁定。而要写入的时候，则必须获取用来写入的锁定。</p>
+
+<p>因为进行读取时，实例的状态不会改变，所以，就算有多个线程在同时读取也没关系。但，有人在读取的时候，不可以做写入的操作。
+写入的时候，实例的状态机会改变。于是，当有一个线程在写入的时候，其他线程就不可以有进行读取或写入。</p>
+
+<p>一般来说，进行共享互斥会使程序性能变差，但将写入的共享互斥与读取的共享互斥分开来思考，就可以提升程序的性能。</p>
+
+<h2>范例</h2>
+
+<ul>
+<li>Main.java</li>
+</ul>
+
+<pre><code>public class Main {
+    public static void main(String[] args) {
+        Data data = new Data(10);
+        new ReaderThread(data).start();
+        new ReaderThread(data).start();
+        new ReaderThread(data).start();
+        new ReaderThread(data).start();
+        new ReaderThread(data).start();
+        new ReaderThread(data).start();
+        new WriterThread(data, "ABCDEFGHIJKLMNOPQTSTUVWXYZ").start();
+        new WriterThread(data, "abcdefghijklmnopqrstuvwxyz").start();
+    }
+}
+</code></pre>
+
+<ul>
+<li>Data.java</li>
+</ul>
+
+<pre><code>public class Data {
+    private final char[] buffer;
+    //这个是该Pattern的主角——ReadWriteLock的实例
+    private final ReadWriteLock lock = new ReadWriteLock();
+    public Data(int size) {
+        this.buffer = new char[size];
+        for (int i = 0; i &lt; buffer.length; i++) {
+            buffer[i] = '*';
+        }
+    }
+    public char[] read() throws InterruptedException {
+        lock.readLock();
+        try {
+            return doRead();
+        } finally {
+            lock.readUnlock();
+        }
+    }
+    public void write(char c) throws InterruptedException {
+        lock.writeLock();
+        try {
+            doWrite(c);
+        } finally {
+            lock.writeUnlock();
+        }
+    }
+    private char[] doRead() {
+        char[] newbuf = new char[buffer.length];
+        for (int i = 0; i &lt; buffer.length; i++) {
+            newbuf[i] = buffer[i];
+        }
+        slowly();
+        return newbuf;
+    }
+    private void doWrite(char c) {
+        for (int i = 0; i &lt; buffer.length; i++) {
+            buffer[i] = c;
+            //模拟需要花点时间的工作
+            //之所以放在循环里面是因为嘉定写入所化的时间会比读取来得长
+            slowly();
+        }
+    }
+    private void slowly() {
+        try {
+            Thread.sleep(50);
+        } catch (InterruptedException e) {
+        }
+    }
+}
+</code></pre>
+
+<ul>
+<li>WriterThread.java</li>
+</ul>
+
+<pre><code>import java.util.Random;
+
+public class WriterThread extends Thread {
+    private static final Random random = new Random();
+    private final Data data;
+    private final String filler;
+    private int index = 0;
+    public WriterThread(Data data, String filler) {
+        this.data = data;
+        this.filler = filler;
+    }
+    public void run() {
+        try {
+            while (true) {
+                char c = nextchar();
+                data.write(c);
+                Thread.sleep(random.nextInt(3000));
+            }
+        } catch (InterruptedException e) {
+        }
+    }
+    private char nextchar() {
+        char c = filler.charAt(index);
+        index++;
+        if (index &gt;= filler.length()) {
+            index = 0;
+        }
+        return c;
+    }
+}
+</code></pre>
+
+<ul>
+<li>ReaderThread.java</li>
+</ul>
+
+<pre><code>public class ReaderThread extends Thread {
+    private final Data data;
+    public ReaderThread(Data data) {
+        this.data = data;
+    }
+    public void run() {
+        try {
+            while (true) {
+                char[] readbuf = data.read();
+                System.out.println(Thread.currentThread().getName() + " reads " + String.valueOf(readbuf));
+            }
+        } catch (InterruptedException e) {
+        }
+    }
+}
+</code></pre>
+
+<ul>
+<li>ReadWriteLock.java</li>
+</ul>
+
+<p>为了保护安全性，我们必须防止下面两种冲突：</p>
+
+<ul>
+<li>“读取”和“写入”的冲突（read-write conflict）</li>
+</ul>
+
+<p>已经有线程在进行写入时，等待。理由：不等待的话，会引起read-write conflict
+已经有线程进行读取时，等待。理由：不等待的话，会引起read-write conflict</p>
+
+<ul>
+<li>“写入”和“写入”的冲突（write-write conflict）</li>
+</ul>
+
+<p>已经有线程在进行写入时，等待。理由：不等待的话，会引起write-write conflict</p>
+
+<p>已经有线程在进行写入时，等待。理由：不等待的话，会引起read-write conflict</p>
+
+<p>已经有线程进行读取时，不等待，理由：read-read不会造成conflict</p>
+
+<ul>
+<li>整理成表格</li>
+</ul>
+
+<table>
+<thead>
+<tr>
+  <th>空</th>
+  <th style="text-align:center;">读取</th>
+  <th style="text-align:right;">写入</th>
+</tr>
+</thead>
+<tr>
+  <td>读取</td>
+  <td style="text-align:center;">不会冲突</td>
+  <td style="text-align:right;">“读取”和“写入”的冲突（read-write conflict）</td>
+</tr>
+<tr>
+  <td>写入</td>
+  <td style="text-align:center;">“读取”和“写入”的冲突（read-write conflict）</td>
+  <td style="text-align:right;">“写入”和“写入”的冲突（write-write conflict）</td>
+</tr>
+</table>
+
+
+<pre><code>public final class ReadWriteLock {
+    private int readingReaders = 0; // (A) 实际正在读取的线程数量
+    private int waitingWriters = 0; // (B) 正在等待写入的线程数量
+    private int writingWriters = 0; // (C) 实际正在写入的线程数量
+    private boolean preferWriter = true; // 写入优先的话，值为true
+
+    public synchronized void readLock() throws InterruptedException {
+        while (writingWriters &gt; 0 || (preferWriter &amp;&amp; waitingWriters &gt; 0)) {
+            wait();
+        }
+        readingReaders++;                       // (A) 实际正在读取的线程数量加1
+    }
+
+    public synchronized void readUnlock() {
+        readingReaders--;                       // (A) 实际正在读取的线程数量减1
+        preferWriter = true;
+        notifyAll();
+    }
+
+    public synchronized void writeLock() throws InterruptedException {
+        waitingWriters++;                       // (B) 正在等待写入的线程数量加1
+        try {
+            while (readingReaders &gt; 0 || writingWriters &gt; 0) {
+                wait();
+            }
+        } finally {
+            waitingWriters--;                   // (B) 正在等待写入的线程数量减1
+        }
+        writingWriters++;                       // (C) 实际正在写入的线程加1
+    }
+
+    public synchronized void writeUnlock() {
+        writingWriters--;                       // (C) 实际正在写入的线程减1
+        preferWriter = false;
+        notifyAll();
+    }
+}
+</code></pre>
+
+<h2>适用性</h2>
+
+<h2>缺点</h2>
+
+<h2>知识点</h2>
+
+<ul>
+<li><p>在read方法的try块中执行了return语句，就连这种情况下，从方法退出之前，finally的内容还是会被执行。</p></li>
+<li><p>doRead方法里，使用for语句来拷贝数组的内容，这是为了方法拿到与doWrite作比较。要拷贝数组的内容时，使用java.lang.System.arraycopy方法是比较普通的方式。</p></li>
+</ul>
+
+<h2>练习问题</h2>
+<script type='text/javascript'>
+$(document).ready(function(){
+  if($('code').length>0){
+    $('code').parent().addClass('prettyprint linenums');
+    prettyPrint();
+};
+});
+</script>
+</body>
+</html>

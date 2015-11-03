@@ -39,6 +39,8 @@
         new EaterThread("EaterThread-3", table, 38327).start();
     }
 }
+
+
 </code></pre>
 
 <ul>
@@ -159,6 +161,23 @@ public class EaterThread extends Thread {
         return cake;
     }
 }
+
+//清楚Table的clear方法
+public synchronized void clear(){
+    //这段while语句只是为了表示被取走的蛋糕，不写也没关系
+    while(count&gt;0){
+        String cake = buffer[head];
+        System.out.println(Thread.currentThread().getName() + " clears "+cake);
+        head = (head + 1 ) % buffer.length;
+        count--;
+
+    }
+
+    head = 0;
+    tail =0 ;
+    count = 0;
+    notifyAll();
+}
 </code></pre>
 
 <h2>Producer-Consumer Pattern 的所有参与者</h2>
@@ -208,6 +227,155 @@ Swing（JFC）Framework中，事件处理的部分，就是使用这个方法（
 event-dispatching thread的数量只有一个，这种设计方式，可以是时间处理的程序好写的多，而且处理的速度也很快。</p>
 
 <h2>练习问题</h2>
+
+<ol>
+<li><p>加上可以清楚蛋糕的方法</p>
+
+<ul><li>ClearThread.java</li></ul></li>
+</ol>
+
+<pre><code>
+public class ClearThread extends Thread {
+    private final Table table;
+    public ClearThread(String name, Table table) {
+        super(name);
+        this.table = table;
+    }
+    public void run() {
+        try {
+            while (true) {
+                Thread.sleep(1000);
+                System.out.println("===== " + getName() + " clears =====");
+                table.clear();
+            }
+        } catch (InterruptedException e) {
+        }
+    }
+}
+</code></pre>
+
+<ul>
+<li>Main.java</li>
+</ul>
+
+<pre><code>public class Main {
+    public static void main(String[] args) {
+        Table table = new Table(3);     // 建立一个能放三个蛋糕的桌子
+        new MakerThread("MakerThread-1", table, 31415).start();
+        new MakerThread("MakerThread-2", table, 92653).start();
+        new MakerThread("MakerThread-3", table, 58979).start();
+
+        new EaterThread("EaterThread-1", table, 32384).start();
+        new EaterThread("EaterThread-2", table, 62643).start();
+        new EaterThread("EaterThread-3", table, 38327).start();
+
+        new ClearThread("ClearThread-0", table).start();
+    }
+}
+</code></pre>
+
+<ol>
+<li><p>修改上面的Main方法，可以10后结束线程</p>
+
+<ul><li>Main.java</li></ul></li>
+</ol>
+
+<pre><code>public class Main {
+    public static void main(String[] args) {
+        Table table = new Table(3);     // 建立一个只能放三个蛋糕的桌子
+        Thread[] threads = {
+            new MakerThread("MakerThread-1", table, 31415),
+            new MakerThread("MakerThread-2", table, 92653),
+            new MakerThread("MakerThread-3", table, 58979),
+            new EaterThread("EaterThread-1", table, 32384),
+            new EaterThread("EaterThread-2", table, 62643),
+            new EaterThread("EaterThread-3", table, 38327),
+        };
+
+        // 启动线程
+        for (int i = 0; i &lt; threads.length; i++) {
+            threads[i].start();
+        }
+
+        // 约休息10秒
+        try {
+            Thread.sleep(10000);
+        } catch (InterruptedException e) {
+        }
+
+        System.out.println("***** interrupt *****");
+
+        //interrupt
+        for (int i = 0; i &lt; threads.length; i++) {
+            threads[i].interrupt();
+        }
+    }
+}
+</code></pre>
+
+<ol>
+<li><p>使繁重的工作可以取消</p>
+
+<ul><li>Main.java</li></ul></li>
+</ol>
+
+<pre><code>public class Main {
+    public static void main(String[] args) {
+        // Hostの重い処理を実行するスレッド
+        Thread executor = new Thread() {
+            public void run() {
+                System.out.println("Host.execute BEGIN");
+                try {
+                    Host.execute(100);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+                System.out.println("Host.execute END");
+            }
+        };
+
+        // 起動する
+        executor.start();
+
+        // 約15秒休む
+        try {
+            Thread.sleep(15000);
+        } catch (InterruptedException e) {
+        }
+
+        // キャンセル実行
+        System.out.println("***** interrupt *****");
+        executor.interrupt();
+    }
+}
+</code></pre>
+
+<ul>
+<li>Host.java</li>
+</ul>
+
+<pre><code>public class Host {
+    public static void execute(int count) throws InterruptedException {
+        for (int i = 0; i &lt; count; i++) {
+            if (Thread.interrupted()) {
+                throw new InterruptedException();
+            }
+            doHeavyJob();
+        }
+    }
+    private static void doHeavyJob() {
+        // 以下は、
+        // 「キャンセル不可能な重い処理」の代用
+        // （約10秒間回るループ）
+        System.out.println("doHeavyJob BEGIN");
+        long start = System.currentTimeMillis();
+        while (start + 10000 &gt; System.currentTimeMillis()) {
+            // busy loop
+        }
+        System.out.println("doHeavyJob END");
+    }
+}
+</code></pre>
 <script type='text/javascript'>
 $(document).ready(function(){
   if($('code').length>0){
