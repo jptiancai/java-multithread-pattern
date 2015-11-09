@@ -272,6 +272,35 @@ public class WriterThread extends Thread {
 
 <p>在ReadWriteLock类中，提供了“读访问锁定”、“写入用锁定”等两种逻辑上的锁定。但是示例做这两种逻辑上的锁定，其实只是用到来了一个物理性的锁定。这个物理性的锁定，就是ReadWriteLock实例的锁定。</p>
 
+<ul>
+<li>Before/After Pattern的架构需要注意的地方</li>
+</ul>
+
+<p>在此，before 在try之外，表示“如果在before的执行过程中发生异常，就不执行execute与after”。例如，从before 中抛出InterruptedException，就可以想成是“before 的执行过程中断”。
+如果before 放在try这段程序代码块中，即使中断before的执行，也会调用处after。</p>
+
+<ul>
+<li>preferWriter字段的作用，如果去掉会怎么样</li>
+</ul>
+
+<p>ReadThread的线程与WriteThread线程的数目哪个多，就会一直输出该日志。</p>
+
+<p>即使有一个ReadThread在进行doRead，WriteThread也会无法执行doWrite。
+但是ReadThread不会被设置为共享互斥，因此会一个个执行doRead。到最后，WriteThread就越来越无法执行doWrite。
+这就好像马路上的车子川流不息，而无法穿越马路的意思是一样的。</p>
+
+<p>范例中的ReadWriteLock类的waitingWriter字段会保持wait中的WriteThread的数目。当waitingWrite > 0成立时，
+通过让ReadThread的线程wait，就可以避免WriteThread无法开始执行的情况。这就像当有人等待过马路时，红绿灯自己就变成红灯让车辆停下来，行人可以安全通过一样。</p>
+
+<p>但是，光是考虑waitWriters的情况的话，下次可能变成ReadThread无法开始执行doRead。那种情况就是1个WriterThread在结束执行doWrite之前，其他的WriterThread
+已经到达了Write。只要有一个WriterThread正在wait，ReaderThread就无法开始执行doRead，因此到最后，ReaderThread就无法开始执行doRead。这就好像一直有人要过马路，
+自按式交通信号灯一直有人按着，两旁的车子就一直等待红灯而无法前进一样。</p>
+
+<p>范例程序的ReadWriteLock类的preferWriter字段是决定ReaderThread和WriterThread何者优先的标识（Flag）。preferWriter只要是true，就开始要考虑Guard条件的waitingWriters。
+然后，在readUnlock中（也就是doRead结束时）将preferWriter设置为true。
+结果，read处理结束后优先write处理，在write处理结束后就优先优先处理read。preferWriter字段就是用来让ReaderThread和WriterThread轮流优先执行的。
+这就好比行人的信号量灯与行车的信号量灯轮流变成红灯时一样的。</p>
+
 <h2>练习问题</h2>
 
 <ul>
@@ -298,6 +327,312 @@ Guard条件相关policy则以GuardStrategy接口表示。
 如果policy未被设置，则默认的policy ，如DefaultReadWriteStrategy类、DefaultReadWriteStrategy类会成为Data类的内部类（inner class）.</p>
 
 <p>以下是程序：</p>
+
+<ul>
+<li>GuardStrategy.java</li>
+</ul>
+
+<pre><code>package readwirtelock;
+
+public interface GuardStrategy{
+    public abstract void beforeReadWait();
+    public abstract boolean readGuard();
+    public abstract void afterReadWait();
+    public abstract void beforeDoRead();
+    public abstract void afterDoRead();
+
+
+    public abstract void beforeWriteWait();
+    public abstract boolean writeGuard();
+    public abstract void afterWriteWait();
+    public abstract void beforeDoWrite();
+    public abstract void afterDoWrite();
+
+}
+</code></pre>
+
+<ul>
+<li>ReadWriteStrategy.java</li>
+</ul>
+
+<pre><code>
+package readwritelock;
+
+public interface ReadWriteStrategy{
+    public abstract Object doRead() throws InterruptedException;
+    public abstract void doWrite(Object arg) throws InterruptedException;
+
+}
+</code></pre>
+
+<ul>
+<li>Data.java</li>
+</ul>
+
+<pre><code>package readwritelock;
+
+public class Data{
+    private final ReadWriteLock lock;
+    private final ReadWriteStrategy readWriteStrategy;
+
+    //使用默认读写策略
+    public Data(){
+        this.lock = new ReadWriteLock(new DefaultReadWriteStrategy());
+        this.readWriteStrategy = new DefaultReadWriteStrategy();
+    }
+
+    //使用防卫式策略
+    public Data(GuardStrategy guardStrategy){
+        this.lock = new ReadWriteLock(guardStrategy);
+        this.readWriteStrategy = new DefaultReadWriteStrategy();
+    }
+
+    //使用读写式策略
+    public Data(ReadWriteStrategy readWriteStrategy){
+        this.lock = new ReadWriteLock(new DefaultReadWriteStrategy());
+        this.readWriteStrategy = readWriteStrategy;
+    }
+
+    //防卫式策略+读写式策略一起用
+    public Data(GuardStrategy guardStrategy,ReadWriteStrategy readWriteStrategy){
+        this.lock = new ReadWriteLock(guardStrategy);
+        this.readWriteStrategy = readWriteStrategy;
+    }
+
+    public Object read throws InterruptedException{
+        lock.readLock();
+        try{
+            return readWriteStrategy.doRead();
+        }finally{
+            lock.readUnlock();
+        }
+    }
+
+    public void write(Object arg) throws InterruptedException{
+        lock.writeLock();
+        try{
+            readWriteStrategy.doWrite(arg);
+        }finally{
+            lock.writeUnlock();
+        }
+    }
+
+    //内部类
+    private class ReadWriteLock{
+        private final GuardStrategy guardStrategy;
+        public ReadWriteLock(GuardStrategy guardStrategy){
+            this.guardStrategy = guardStrategy;
+        }
+
+        public synchronized void readLock() throws InterruptedException{
+            guardStrategy.beforeReadWait();
+            try{
+                while(!guardStrategy.readGuard()){
+                    wait();
+                }
+            }finally{
+                guardStrategy.afterReadWait();
+            }
+
+            guardStrategy.beforeDoRead();
+        }
+
+        public synchronized void readUnlock(){
+            guardStrategy.afterDoRead();
+            notifyAll();
+        }
+
+        public synchronized void writeLock() throws InterruptedException{
+            guardStrategy.beforeWriteWait();
+            try{
+                while(!guardStrategy.writeGuard){
+                    wait();
+                }
+            }finally{
+                    guardStrategy.beforeDoWrite();
+            }
+
+            guardStrategy.beforeDoWrite();
+        }
+
+        public synchronized void writeUnlock(){
+            guardStrategy.afterDoWrite();
+            notifyAll();
+        }
+
+        //内部类
+        private class DefaultReadWriteStrategy implements GuardStrategy{
+              private int readingReaders = 0; // (A) 实际正在读取的线程数量
+              private int waitingWriters = 0; // (B) 正在等待写入的线程数量
+              private int writingWriters = 0; // (C) 实际正在写入的线程数量，字段的知不是0就是1，绝不会是2以上（一瞬间都不会）  
+              private boolean preferWriter = true; // 写入优先的话，值为true。这是为了使线程的生命性不会降低所做的功劳。
+              public void beforeReadWait(){
+                //
+              }
+
+              public boolean readGuard(){
+                return !(writingWriters &gt; 0 || (preferWriter &amp;&amp; 
+                 waitingWriters &gt;0);
+              }
+
+              public void afterReadWait(){
+                //
+              }
+
+              public void beforeDoRead(){
+                readingReaders++;
+              }
+
+              public void afterDoRead(){
+                readingReaders--;
+                preferWriter = true;
+              }
+
+              public void beforeWriteWait(){
+                waitingWriters++;
+              }
+
+              public boolean writeGuard(){
+                return !(readingReaders &gt; 0 || writingWriters &gt; 0);
+              }
+
+              public void afterWriteWait(){
+                waitingWriters--;
+              }
+
+              public void beforeDoWrite(){
+                writingWriters++;
+              }
+
+              public void afterDoWrite(){
+                writingWriters--;
+                preferWriter = false;
+              }
+        }
+
+        // 内部类
+        private class DefaultReadWriteStrategy implements ReadWriteStrategy{
+            private final char[] buffer;
+            public DefaultReadWriteStrategy(){
+                this(10);
+            }
+
+            public DefaultReadWriteStrategy(int size){
+                this.buffer = new char[size];
+                for (int i=0;i &lt; buffer.length; i++){
+                    buffer[i] = '*';
+                }
+            }
+
+            public Object doRead() throws InterruptedException{
+                char []newBuf=new char[buffer.length];
+                for (int i=0;i &lt; buffer.length; i++){
+                    newBuf[i] = buffer[i];
+                }
+
+                slowly();
+                return newBuf;
+            }
+
+            public void doWrite(Object arg) throws InterruptedException{
+                char c= ((Character)arg).CharValue();
+                for (int i=0;i &lt; buffer.length; i++){
+                    newBuf[i] = c;
+                    slowly();
+                }
+            }
+
+            private void slowly() throws InterruptedException{
+                Thread.sleep(50);
+            }
+        }       
+
+    }
+}
+</code></pre>
+
+<ul>
+<li>ReadThread.java</li>
+</ul>
+
+<pre><code>package readwritelock.Data;
+
+public class ReadThread extends Thread{
+    private final Data data;
+    public ReadThread(Data data){
+        this.data = data;
+    }
+
+    public void run(){
+        try{
+            while(true){
+                char[] readbuf = (char[])data.read();
+                System.out.println(Thread.currentThread.getName()+
+                " reads " +String.valueOf(readbuf));
+            }
+        }catch(InterruptedException e){
+
+        }
+    }
+}</code></pre>
+
+<ul>
+<li>WriteThread.java</li>
+</ul>
+
+<pre><code>import readwritelock.Data;
+import java.util.Random;
+
+public class WriteThread extends Thread{
+    private static final Readom random = new Random();
+    private final Data data;
+    private final String filler;
+    private int index = 0;
+    public WriteThread(Data data, String filler){
+        this.data = data;
+        this.filler = filler;
+    }
+
+    public void run(){
+        try{
+            while(true){
+                Character c =nextchar();
+                data.write(c);
+                Thread.sleep(random.nextInt(3000));
+            }
+        }catch(InterruptedException e){
+        }
+    }
+
+    private Character nextchar(){
+        char c = filler.charAt(index);
+        index ++;
+        if(index &gt;= filler.length()){
+            index = 0;
+        }
+        return new Character(c);
+    }
+}</code></pre>
+
+<ul>
+<li>Main.java</li>
+</ul>
+
+<pre><code>import readwritelock.Data;
+
+public class Main {
+    public static void main(String[] args) {
+        Data data = new Data();
+        new ReaderThread(data).start();
+        new ReaderThread(data).start();
+        new ReaderThread(data).start();
+        new ReaderThread(data).start();
+        new ReaderThread(data).start();
+        new ReaderThread(data).start();
+        new WriterThread(data, "ABCDEFGHIJKLMNOPQTSTUVWXYZ").start();
+        new WriterThread(data, "abcdefghijklmnopqrstuvwxyz").start();
+    }
+}</code></pre>
 <script type='text/javascript'>
 $(document).ready(function(){
   if($('code').length>0){
