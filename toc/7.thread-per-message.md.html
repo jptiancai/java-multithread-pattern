@@ -20,6 +20,66 @@
 <p>使用Thread-Per-Message Pattern时，“委托消息的一端”与“执行消息的一端”会是不同的线程。
 也就像是委托消息的线程，对执行消息的线程说“这个工作交给你了”</p>
 
+<h2>范例</h2>
+
+<ul>
+<li>Host.java</li>
+</ul>
+
+<pre><code>public class Host {
+    private final Helper helper = new Helper();
+    public void request(final int count, final char c) {
+        System.out.println("    request(" + count + ", " + c + ") BEGIN");
+        new Thread() {
+            public void run() {
+                helper.handle(count, c);
+            }
+        }.start();
+        System.out.println("    request(" + count + ", " + c + ") END");
+    }
+}
+</code></pre>
+
+<ul>
+<li>Helper.java</li>
+</ul>
+
+<pre><code>
+public class Helper {
+    public void handle(int count, char c) {
+        System.out.println("        handle(" + count + ", " + c + ") BEGIN");
+        for (int i = 0; i &lt; count; i++) {
+            slowly();
+            System.out.print(c);
+        }
+        System.out.println("");
+        System.out.println("        handle(" + count + ", " + c + ") END");
+    }
+    private void slowly() {
+        try {
+            Thread.sleep(100);
+        } catch (InterruptedException e) {
+        }
+    }
+}
+</code></pre>
+
+<ul>
+<li>Main.java</li>
+</ul>
+
+<pre><code>public class Main {
+    public static void main(String[] args) {
+        System.out.println("main BEGIN");
+        Host host = new Host();
+        host.request(10, 'A');
+        host.request(20, 'B');
+        host.request(30, 'C');
+        System.out.println("main END");
+    }
+}
+</code></pre>
+
 <h2>适用性</h2>
 
 <h2>缺点</h2>
