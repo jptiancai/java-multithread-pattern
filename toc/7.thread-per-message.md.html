@@ -28,6 +28,7 @@
 
 <pre><code>public class Host {
     private final Helper helper = new Helper();
+    //在匿名内部类中，用到方法的参数或局部变量时，必须将变量声明称final。如果没有，会出现编译错误。
     public void request(final int count, final char c) {
         System.out.println("    request(" + count + ", " + c + ") BEGIN");
         new Thread() {
@@ -80,13 +81,69 @@ public class Helper {
 }
 </code></pre>
 
-<h2>适用性</h2>
+<h2>Thread-Per-Message Pattern参与者</h2>
 
-<h2>缺点</h2>
+<ul>
+<li>Client（委托人）参与者：Main类</li>
+<li>Host参与者：Host类</li>
+<li>Helper（帮助者）参与者：Helper类</li>
+</ul>
 
-<h2>知识点</h2>
+<p>Client&#8211;调用&#8211;>Host&#8211;使用&#8211;>Helper</p>
+
+<h2>扩展思考</h2>
+
+<ul>
+<li>提升响应性，降低延误时间</li>
+</ul>
+
+<p>为了降低启动线程所需的时间，可使用Worker Pattern</p>
+
+<ul>
+<li>适当在操作顺序无所谓时使用</li>
+</ul>
+
+<p>handle的顺序并不一定是调用request方法的顺序。如果对操作顺序有要求，不适合使用Thread-Per-Message Pattern</p>
+
+<ul>
+<li>不需要返回值的时候</li>
+</ul>
+
+<p>例如通知事件的发生等等。
+如果需要处理结果时，可使用Future Pattern</p>
+
+<ul>
+<li>应用在服务器的制作</li>
+</ul>
+
+<p>为了使服务器可以处理多数的请求，可以使用Thread-Per-Message Pattern。
+客户端送达的请求，由主线程来接受。而实际处理该请求，则交给其他线程负责，服务器的主线程回到继续等待其他客户端请求的状态。</p>
+
+<ul>
+<li>调用方法+ 启动线程->传递消息</li>
+</ul>
+
+<p>通常调用处普通方法时，会执行完方法里的所有操作，控制权才会回来。Thread-Per-Message Pattern里，因为request也是普通方法，所以也是执行完request方法的内容，
+控制权才回来。但请思考“request方法又进行真正想要做的操作（显示字符串）了吗？”并不是从request方法回来，就表示字符串显示完了。request是期待的操作开始处理的
+出发其（Trigger），但不会等待执行结束。</p>
 
 <h2>练习问题</h2>
+
+<ul>
+<li>不使用Thread-Per-Message Pattern 的版本</li>
+</ul>
+
+<pre><code>public class Host{
+
+    private final Helper helper = new Helper();
+    public void request(final int count ,final char c){
+        System.out.println("      request("+ count+", "+c+") BEGIN");
+        helper.handle(count,c);
+        System.out.println("      request("+ count+", "+c+") END");
+
+    }
+
+}</code></pre>
 <script type='text/javascript'>
 $(document).ready(function(){
   if($('code').length>0){
