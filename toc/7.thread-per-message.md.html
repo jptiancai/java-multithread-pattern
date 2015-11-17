@@ -391,6 +391,139 @@ public class MyFrame extends JFrame implements ActionListener {
     }
 }
 </code></pre>
+
+<ul>
+<li>制作服务器,使用Thread-Per-Message Pattern ，将它修改为可以同时应对多个Web浏览器的服务器。</li>
+</ul>
+
+<pre><code>import java.net.Socket;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.BufferedReader;
+import java.io.DataOutputStream;
+
+public class Service {
+    private Service() {
+    }
+    public static void service(Socket clientSocket) throws IOException {
+        System.out.println(Thread.currentThread().getName() + ": Service.service(" + clientSocket + ") BEGIN");
+        try {
+            DataOutputStream out = new DataOutputStream(clientSocket.getOutputStream());
+            out.writeBytes("HTTP/1.0 200 OK\r\n");
+            out.writeBytes("Content-type: text/html\r\n");
+            out.writeBytes("\r\n");
+            out.writeBytes("&lt;html&gt;&lt;head&gt;&lt;title&gt;Countdown&lt;/title&gt;&lt;/head&gt;&lt;body&gt;");
+            out.writeBytes("&lt;h1&gt;Countdown start!&lt;/h1&gt;");
+            for (int i = 10; i &gt;= 0; i--) {
+                System.out.println(Thread.currentThread().getName() + ": Countdown i = " + i);
+                out.writeBytes("&lt;h1&gt;" + i + "&lt;/h1&gt;");
+                out.flush();
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                }
+            }
+            out.writeBytes("&lt;/body&gt;&lt;/html&gt;");
+        } finally {
+            clientSocket.close();
+        }
+        System.out.println(Thread.currentThread().getName() + ": Service.service(" + clientSocket + ") END");
+    }
+}
+</code></pre>
+
+<pre><code>import java.net.Socket;
+import java.net.ServerSocket;
+import java.io.IOException;
+
+public class MiniServer {
+    private final int portnumber;
+    public MiniServer(int portnumber) {
+        this.portnumber = portnumber;
+    }
+    public void execute() throws IOException {
+        ServerSocket serverSocket = new ServerSocket(portnumber);
+        System.out.println("Listening on " + serverSocket);
+        try {
+            while (true) {
+                System.out.println("Accepting...");
+                final Socket clientSocket = serverSocket.accept();
+                System.out.println("Connected to " + clientSocket);
+                new Thread() {
+                    public void run() {
+                        try {
+                            Service.service(clientSocket);
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                }.start();
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        } finally {
+            serverSocket.close();
+        }
+    }
+}
+</code></pre>
+
+<pre><code>//或者上面的创建新线程可以用ExecutorService代替
+
+import java.net.Socket;
+import java.net.ServerSocket;
+import java.io.IOException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+public class MiniServer {
+    private final int portnumber;
+    public MiniServer(int portnumber) {
+        this.portnumber = portnumber;
+    }
+    public void execute() throws IOException {
+        ServerSocket serverSocket = new ServerSocket(portnumber);
+        ExecutorService executorService = Executors.newCachedThreadPool();
+        System.out.println("Listening on " + serverSocket);
+        try {
+            while (true) {
+                System.out.println("Accepting...");
+                final Socket clientSocket = serverSocket.accept();
+                System.out.println("Connected to " + clientSocket);
+                executorService.execute(
+                    new Runnable() {
+                        public void run() {
+                            try {
+                                Service.service(clientSocket);
+                            } catch (IOException e) {
+                                e.printStackTrace();
+                            }
+                        }
+                    }
+                );
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        } finally {
+            executorService.shutdown();
+            serverSocket.close();
+        }
+    }
+}
+</code></pre>
+
+<pre><code>import java.io.IOException;
+
+public class Main {
+    public static void main(String args[]) {
+        try {
+            new MiniServer(8888).execute();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+}
+</code></pre>
 <script type='text/javascript'>
 $(document).ready(function(){
   if($('code').length>0){
