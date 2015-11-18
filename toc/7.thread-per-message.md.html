@@ -524,6 +524,126 @@ public class Main {
     }
 }
 </code></pre>
+
+<ul>
+<li>检验您对多线程的理解。</li>
+</ul>
+
+<p>在enter方法中，有用来显示Step1、Step2、Step3等字符串的语句。在显示Step1、Step2
+之间，调用了magic方法。而现在的目标是调用enter方法时，会显示出</p>
+
+<p>BEGIN
+Step1
+Step2
+（在这里停止不动，CTRL+C结束程序）</p>
+
+<pre><code>public class Main {
+    public static void main(String args[]) {
+        System.out.println("BEGIN");
+        Object obj = new Object();
+        Blackhole.enter(obj);
+        System.out.println("END");
+    }
+}
+</code></pre>
+
+<pre><code>public class Blackhole {
+    public static void enter(Object obj) {
+        System.out.println("Step 1");
+        magic(obj);
+        System.out.println("Step 2");
+        synchronized (obj) {
+            System.out.println("Step 3 (never reached here)");  // 不会到这里来
+        }
+    }
+    public static void magic(final Object obj) {
+        // thread回去的obj的lock，变成无穷循环的线程
+        // 将thread的线程当做Guard条件来使用
+        Thread thread = new Thread() {      // inner class
+            public void run() {
+                synchronized (obj) {        // 在此取得obj的lock
+                    synchronized (this) {
+                        this.setName("Locked"); // Guard条件的变化
+                        this.notifyAll();       // 通知已经取得obj
+                    }
+                    while (true) {
+                        // 无穷循环
+                    }
+                }
+            }
+        };
+        synchronized (thread) {
+            thread.setName("");
+            thread.start();         // 线程的启动
+            // Guarded Suspension 模式
+            while (thread.getName().equals("")) {
+                try {
+                    thread.wait();  // 等待新的线程取得obj的lock
+                } catch (InterruptedException e) {
+                }
+            }
+        }
+    }
+}
+</code></pre>
+
+<p>[1] 因为显示了Step2，magic方法就不会抛出异常
+[2] Step3或End不会被显示出来，因此线程不会从enter方法回来。
+[3] Step3没有被显示出来是因为线程没有取得obj的锁定就阻挡起来。
+[4] magic方法的工作中，就是取得参数obj。</p>
+
+<p>但是，若想要取得锁定，即使单纯地使用synchronized也是不行的。在从magic
+方法回来的时候，就从synchronized跳出，是因为锁定被解开的缘故。这样的情况，我们只要进行[5],[6]的处理即可。
+[5] magic 方法中，启动新的线程，让这个线程取得obj的锁定。
+[6] 新的线程永远保持取得obj的锁定的状态。</p>
+
+<p>如果想说到这个阶段就可以了，那你很可能会忽略了下面的[7]。</p>
+
+<p>[7] 新的线程启动，取得obj的锁定为止，原来的线程不能从magic方法回来。
+此外，为了满足[7]，我们使用Guarded Suspension模式。原来的线程会在thread上一直wait，
+直到thread的名字在“”之外。
+另一方面，新的线程在取得obj的锁定之后，将名称改为“Locked”，将在thread（此与this等值）上
+wait的原线程进行notifyAll。
+在此我们使用notifyAll,不过在thread上wait的线程一定只有一个，所以就算用notify也是没问题的。</p>
+
+<p>自己把自己的状态从""-->“Locked”,然后再从"Locked"-->""，如此仿佛一直没有出来，也没有异常
+方法里面只有一个线程在运行。</p>
+
+<pre><code>//另一种解法
+public class Blackhole {
+    public static void enter(Object obj) {
+        System.out.println("Step 1");
+        magic(obj);
+        System.out.println("Step 2");
+        synchronized (obj) {
+            System.out.println("Step 3 (never reached here)");  // 不会到这里来
+        }
+    }
+    public static void magic(final Object obj) {
+        // thread会取得obj的lock，变成等待自己结束的线程
+        Thread thread = new Thread() {
+            public void run() {
+                synchronized (obj) {        // 在这里取得obj的锁定
+                    synchronized (this) {
+                        this.notifyAll();   // 通知已经取得obj的锁定
+                    }
+                    try {
+                        this.join(); // 永远等待
+                    } catch (InterruptedException e) {
+                    }
+                }
+            }
+        };
+        synchronized (thread) {
+            thread.start();     // 线程启动
+            try {
+                thread.wait();  // 等待新的线程取得obj的锁定
+            } catch (InterruptedException e) {
+            }
+        }
+    }
+}
+</code></pre>
 <script type='text/javascript'>
 $(document).ready(function(){
   if($('code').length>0){
