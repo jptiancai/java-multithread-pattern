@@ -400,6 +400,160 @@ Event-dispatching thread 执行。
     }
 }
 </code></pre>
+
+<ul>
+<li>event-dispatching thread不可以调用javax.swing.SwingUtilities类的invokeAndWait方法，为什么？</li>
+</ul>
+
+<p>因为会失去生存性</p>
+
+<p>调用该方法，就等于是调用出时间队列中的一个事件invokeAndWait。从invokeAndWait回来时，
+这个事件的处理才告结束。
+但是为了从invokeAndWait回来，首先必须要事件队列中的所有时间都先处理完毕。
+这样到最后，就变成无法从invokeAndWait回来了。
+Event dispatching Threwad就动弹不了了，GUI应用程序的事件处理就失去其功能了。
+其实看方法名字就知道会等待的。</p>
+
+<ul>
+<li>GUI Swing程序显示计数</li>
+</ul>
+
+<p>原程序</p>
+
+<pre><code>import javax.swing.JFrame;
+import javax.swing.JButton;
+import javax.swing.JLabel;
+import java.awt.FlowLayout;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+
+public class MyFrame extends JFrame implements ActionListener {
+    private final JLabel label = new JLabel("Event Dispatching Thread Sample");
+    private final JButton button = new JButton("countUp");
+    public MyFrame() {
+        super("MyFrame");
+        getContentPane().setLayout(new FlowLayout());
+        getContentPane().add(label);
+        getContentPane().add(button);
+        button.addActionListener(this);
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        pack();
+        setVisible(true);
+    }
+    public void actionPerformed(ActionEvent e) {
+        if (e.getSource() == button) {
+            countUp();
+        }
+    }
+    private void countUp() {
+        for (int i = 0; i &lt; 10; i++) {
+            System.out.println(Thread.currentThread().getName() + ":countUp:setText(" + i + ")");
+            label.setText("" + i);
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+            }
+        }
+    }
+}
+</code></pre>
+
+<hr />
+
+<p>改后的程序</p>
+
+<p>因为Swing的Event Dispatching Thread为了处理而花了约10秒在进行循环的缘故。
+会进行画面显示的，就是Event Dispatching Thread。
+Event Dispatching Thread如果没有从actionPerformed方法回来，画面就不会更新。</p>
+
+<ol>
+<li>为了提高响应性，将工作委托其他线程</li>
+<li>为了将工作委托 Event Dispatching Thread，必须使用invokeLater方法</li>
+</ol>
+
+<pre><code>import javax.swing.JFrame;
+import javax.swing.JButton;
+import javax.swing.JLabel;
+import javax.swing.SwingUtilities;
+import java.awt.FlowLayout;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+
+public class MyFrame extends JFrame implements ActionListener {
+    private final JLabel label = new JLabel("Event Dispatching Thread Sample");
+    private final JButton button = new JButton("countUp");
+    public MyFrame() {
+        super("MyFrame");
+        getContentPane().setLayout(new FlowLayout());
+        getContentPane().add(label);
+        getContentPane().add(button);
+        button.addActionListener(this);
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        pack();
+        setVisible(true);
+    }
+    public void actionPerformed(ActionEvent e) {
+        if (e.getSource() == button) {
+            countUp();
+        }
+    }
+    private void countUp() {
+        System.out.println(Thread.currentThread().getName() + ":countUp:BEGIN");
+
+        // invokerThread在指定时间内sleep之后，调用SwingUtilities.invokeLater
+        new Thread("invokerThread") {
+            public void run() {
+                System.out.println(Thread.currentThread().getName() + ":invokerThread:BEGIN");
+                for (int i = 0; i &lt; 10; i++) {
+                    final String string = "" + i;
+                    try {
+                        // executor会被从Event Dispatching Thread调用
+                        final Runnable executor = new Runnable() {
+                            public void run() {
+                                System.out.println(Thread.currentThread().getName() + ":executor:BEGIN:string = " + string);
+                                label.setText(string);
+                                System.out.println(Thread.currentThread().getName() + ":executor:END");
+                            }
+                        };
+
+                        // 让Event Dispatching Thread调用出executor
+                        SwingUtilities.invokeLater(executor);
+
+                        Thread.sleep(1000);
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+                System.out.println(Thread.currentThread().getName() + ":invokerThread:END");
+            }
+        }.start();
+
+        System.out.println(Thread.currentThread().getName() + ":countUp:END");
+    }
+}
+</code></pre>
+
+<pre><code>public class Main {
+    public static void main(String[] args) {
+        System.out.println(Thread.currentThread().getName() + ":BEGIN");
+        new MyFrame();
+        System.out.println(Thread.currentThread().getName() + ":END");
+    }
+}
+</code></pre>
+
+<ul>
+<li><p>正常结束 Worker Thread实例代码</p>
+
+<p>首先我们不用Thread的stop方法。这是应为stop方法即使是对锁定的线程，也能让它结束，所以较不安全。
+会用interrupt方法代替</p></li>
+</ul>
+
+<pre><code></code></pre>
+
+<pre><code></code></pre>
+
+<pre><code></code></pre>
 <script type='text/javascript'>
 $(document).ready(function(){
   if($('code').length>0){
