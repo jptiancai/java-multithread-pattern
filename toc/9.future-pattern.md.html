@@ -1,29 +1,43 @@
-##概念##
+﻿<!doctype html public '-//W3C//DTD HTML 4.0 Transitional //EN'>
+<html>
+<head>
+<title>9.future-pattern</title>
+<meta charset='UTF-8' />
+<meta name='generator' content='EverEdit' />
+<link href='E:\EverEdit\mode\markdown\default.css' rel='stylesheet'></link>
+<link href='E:\EverEdit\mode\markdown\prettify.css' rel='stylesheet'></link>
+<script type='text/javascript' src='E:\EverEdit\mode\markdown\prettify.js'></script>
+<script type='text/javascript' src='E:\EverEdit\mode\markdown\jquery-1.10.2.min.js'></script>
+<script type='text/javascript' src='E:\EverEdit\mode\markdown\toc.js'></script>
+</head>
+<body>
+<div id='generated-toc'></div>
+<h2>概念</h2>
 
-我去蛋糕店买蛋糕。下订单以后，店员请我“请在天黑以后再来点取货”，
+<p>我去蛋糕店买蛋糕。下订单以后，店员请我“请在天黑以后再来点取货”，
 并给我一张提货单。黄昏后，我就拿着这张提货单到蛋糕店取货。
-店员说了一声“先生，您的蛋糕已经好了”，并把蛋糕交给了我。
+店员说了一声“先生，您的蛋糕已经好了”，并把蛋糕交给了我。</p>
 
-这就是Future Pattern.
+<p>这就是Future Pattern.</p>
 
-假设有一个执行起来需要花一些时间的方法，我们就不要等待执行结果出来了，
-而获取一张替代的“提货单”。因为获取提货单不需要花时间，这是这个“提货单”就是Future参与者
+<p>假设有一个执行起来需要花一些时间的方法，我们就不要等待执行结果出来了，
+而获取一张替代的“提货单”。因为获取提货单不需要花时间，这是这个“提货单”就是Future参与者</p>
 
-获取Future参与者的线程，会在事后再去获取执行结果，就好像那提货单去领取蛋糕一样。
+<p>获取Future参与者的线程，会在事后再去获取执行结果，就好像那提货单去领取蛋糕一样。
 如果已经有执行结果了，就可以马上拿到数据。
-如果执行结果还没好，则继续等待到执行结果出现为止。
+如果执行结果还没好，则继续等待到执行结果出现为止。</p>
 
+<h2>准备工作</h2>
 
-##准备工作##
+<p>在学习本模式之前，务必先看过Thread-Per-Message Pattern</p>
 
-在学习本模式之前，务必先看过Thread-Per-Message Pattern
+<h2>范例程序</h2>
 
-##范例程序##
+<ul>
+<li>Main.java</li>
+</ul>
 
-- Main.java
-
-```
-public class Main {
+<pre><code>public class Main {
     public static void main(String[] args) {
         System.out.println("main BEGIN");
         Host host = new Host();
@@ -44,13 +58,13 @@ public class Main {
         System.out.println("main END");
     }
 }
+</code></pre>
 
-```
+<ul>
+<li>Host.java</li>
+</ul>
 
-- Host.java
-
-```
-public class Host {
+<pre><code>public class Host {
     public Data request(final int count, final char c) {
         System.out.println("    request(" + count + ", " + c + ") BEGIN");
 
@@ -71,22 +85,22 @@ public class Host {
         return future;
     }
 }
+</code></pre>
 
-```
+<ul>
+<li>Data.java</li>
+</ul>
 
-- Data.java
-
-```
-public interface Data {
+<pre><code>public interface Data {
     public abstract String getContent();
 }
+</code></pre>
 
-```
+<ul>
+<li>FutureData.java</li>
+</ul>
 
-- FutureData.java
-
-```
-public class FutureData implements Data {
+<pre><code>public class FutureData implements Data {
     private RealData realdata = null;
     private boolean ready = false;
     public synchronized void setRealData(RealData realdata) {
@@ -107,18 +121,18 @@ public class FutureData implements Data {
         return realdata.getContent();
     }
 }
+</code></pre>
 
-```
+<ul>
+<li>RealData.java</li>
+</ul>
 
-- RealData.java
-
-```
-public class RealData implements Data {
+<pre><code>public class RealData implements Data {
     private final String content;
     public RealData(int count, char c) {
         System.out.println("        making RealData(" + count + ", " + c + ") BEGIN");
         char[] buffer = new char[count];
-        for (int i = 0; i < count; i++) {
+        for (int i = 0; i &lt; count; i++) {
             buffer[i] = c;
             try {
                 Thread.sleep(100);
@@ -132,13 +146,18 @@ public class RealData implements Data {
         return content;
     }
 }
+</code></pre>
 
-```
+<h2>知识点</h2>
 
-
-
-
-##知识点##
-
-
-##练习问题##
+<h2>练习问题</h2>
+<script type='text/javascript'>
+$(document).ready(function(){
+  if($('code').length>0){
+    $('code').parent().addClass('prettyprint linenums');
+    prettyPrint();
+};
+});
+</script>
+</body>
+</html>
