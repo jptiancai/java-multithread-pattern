@@ -41,7 +41,7 @@
     public static void main(String[] args) {
         System.out.println("main BEGIN");
         Host host = new Host();
-        Data data1 = host.request(10, 'A');
+        Data data1 = host.request(10, 'A');//马上得到提过单
         Data data2 = host.request(20, 'B');
         Data data3 = host.request(30, 'C');
 
@@ -52,7 +52,7 @@
         }
         System.out.println("main otherJob END");
 
-        System.out.println("data1 = " + data1.getContent());
+        System.out.println("data1 = " + data1.getContent());//根据提货单拿到真实的货物
         System.out.println("data2 = " + data2.getContent());
         System.out.println("data3 = " + data3.getContent());
         System.out.println("main END");
@@ -63,6 +63,12 @@
 <ul>
 <li>Host.java</li>
 </ul>
+
+<p>request 方法虽然不是synchronized的，但是就算从多个线程同时调用，
+仍是安全的。这是因为request里还是用的参数(count,c)与局部变量(future)都是调用
+request方法的线程所拥有的，而不是由多个线程所共有的。</p>
+
+<p>request方法的参数(count,c)与局部变量声明为final，是为了在匿名内部类里使用</p>
 
 <pre><code>public class Host {
     public Data request(final int count, final char c) {
@@ -100,9 +106,14 @@
 <li>FutureData.java</li>
 </ul>
 
+<p>如果RealData的实例已经设置了，那就会马上从getContent方法退出。
+如果RealData的实例还没有好，那就会wait到好了为止。
+在wait状态里的线程，会被setRealData方法里调用notifyAll唤醒。</p>
+
 <pre><code>public class FutureData implements Data {
     private RealData realdata = null;
     private boolean ready = false;
+    //有多个线程调用会怎么办?
     public synchronized void setRealData(RealData realdata) {
         if (ready) {
             return;     // balk
@@ -111,6 +122,7 @@
         this.ready = true;
         notifyAll();
     }
+    //当有多个线程调用会怎么办?
     public synchronized String getContent() {
         while (!ready) {
             try {
@@ -148,7 +160,34 @@
 }
 </code></pre>
 
+<h2>Future Pattern的所有参与者</h2>
+
+<ul>
+<li>Client（委托人）参与者：Main类</li>
+<li>Host参与者：Host类</li>
+<li>VirtualData（虚拟的数据）参与者：Data接口</li>
+<li>RealData（实际数据）参与者：RealData类</li>
+<li>Future（提货单）参与者：FutureData类</li>
+</ul>
+
 <h2>知识点</h2>
+
+<ul>
+<li>能够提升throughput？</li>
+</ul>
+
+<p>Thread-Per-Message Pattern中，我们无法得到处理的结果。可是，Future Pattern 
+不只可以达到如同Thread-Per-Message Pattern的响应性，还可以获得处理的结果。</p>
+
+<p>的确，程序写成多线程后，处理总时间并没有理由缩短。但问题在于“负担处理时间的是哪个线程”。
+在单CPU上运行的Java执行环境上，把单纯的一连串运算以多线程处理，应该是不会提高throughput。
+因为就算是多个线程分担运算，最后还是由一个CPU在负责运算。</p>
+
+<p>但是，如果加上I/O(输入/输出)处理，就不一样了。例如，对硬盘访问的时候，并不是所有工作都是有CPU进行的。
+当硬盘读写数据的时候，CPU只是在等待工作结束而已。
+对CPU而言，这时是“空闲时间”。若能将这些空闲时间分配给其他线程，继续其他的处理操作，是可能提高throughput的。</p>
+
+<p>具体的可以参考 <a href="http://www.ibm.com/developerworks/cn/linux/l-async/">使用异步 I/O 大大提高应用程序的性能</a></p>
 
 <h2>练习问题</h2>
 <script type='text/javascript'>
