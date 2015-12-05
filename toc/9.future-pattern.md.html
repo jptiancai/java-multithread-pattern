@@ -279,6 +279,370 @@ Client参与者也必须考虑多线程了。
 主线程 data3=CCCCCCCCCCCCCCCCCCCCCCCCCCCC
 主线程 main END
 </code></pre>
+
+<ul>
+<li>套用Future Pattern ，指定URL以从网络上获取文件的程序。请将这个程序改成多线程的版本。</li>
+</ul>
+
+<p>Main.java</p>
+
+<pre><code>import content.Retriever;
+import content.Content;
+
+import java.io.IOException;
+import java.io.FileOutputStream;
+
+public class Main {
+    public static void main(String args[]) {
+        long start = System.currentTimeMillis();
+
+        Content content1 = Retriever.retrieve("http://www.yahoo.com/");
+        Content content2 = Retriever.retrieve("http://www.google.com/");
+        Content content3 = Retriever.retrieve("http://www.hyuki.com/");
+
+        saveToFile("yahoo.html", content1);
+        saveToFile("google.html", content2);
+        saveToFile("hyuki.html", content3);
+
+        long end = System.currentTimeMillis();
+
+        System.out.println("Elapsed time = " + (end - start) + "msec.");
+    }
+
+    // 将content的内容输出到名为filename的文件里
+    private static void saveToFile(String filename, Content content) {
+        byte[] bytes = content.getBytes();
+        try {
+            System.out.println(Thread.currentThread().getName() + ": Saving to " + filename);
+            FileOutputStream out = new FileOutputStream(filename);
+            for (int i = 0; i &lt; bytes.length; i++) {
+                out.write(bytes[i]);
+            }
+            out.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+}
+</code></pre>
+
+<p>Retriever.java</p>
+
+<p>方法一：使用了concurrent.FutureTask中的方法</p>
+
+<pre><code>package content;
+
+import java.util.concurrent.Callable;
+
+public class Retriever {
+    public static Content retrieve(final String urlstr) {
+        AsyncContentImpl future = new AsyncContentImpl(
+            new Callable&lt;SyncContentImpl&gt;() {
+                public SyncContentImpl call() {
+                    return new SyncContentImpl(urlstr);
+                }
+            }
+        );
+
+        //注意这里启动的新的线程
+        new Thread(future).start();
+
+        return future;
+    }
+}
+</code></pre>
+
+<p>content.java</p>
+
+<pre><code>package content;
+
+public interface Content {
+    public abstract byte[] getBytes();
+}
+</code></pre>
+
+<p>SyncContentImpl.java</p>
+
+<pre><code>package content;
+
+import java.io.DataInputStream;
+import java.io.EOFException;
+import java.net.URL;
+
+class SyncContentImpl implements Content {
+    private byte[] contentbytes;
+    public SyncContentImpl(String urlstr) {
+        System.out.println(Thread.currentThread().getName() + ": Getting " + urlstr);
+        try {
+            URL url = new URL(urlstr);
+            DataInputStream in = new DataInputStream(url.openStream());
+            byte[] buffer = new byte[1];
+            int index = 0;
+            try {
+                while (true) {
+                    int c = in.readUnsignedByte();
+                    if (buffer.length &lt;= index) {
+                        byte[] largerbuffer = new byte[buffer.length * 2];
+                        System.arraycopy(buffer, 0, largerbuffer, 0, index);
+                        buffer = largerbuffer;
+                        // System.out.println("Enlarging buffer to " + buffer.length);
+                    }
+                    buffer[index++] = (byte)c;
+                    // System.out.print("Getting " + index + " bytes from " + urlstr);
+                }
+            } catch (EOFException e) {
+            } finally {
+                in.close();
+            }
+            contentbytes = new byte[index];
+            System.arraycopy(buffer, 0, contentbytes, 0, index);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+    public byte[] getBytes() {
+        return contentbytes;
+    }
+}
+</code></pre>
+
+<p>AsyncContentImpl.java</p>
+
+<pre><code>package content;
+
+import java.util.concurrent.Callable;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.ExecutionException;
+
+class AsyncContentImpl extends FutureTask&lt;SyncContentImpl&gt; implements Content {
+    public AsyncContentImpl(Callable&lt;SyncContentImpl&gt; callable) {
+        super(callable);
+    }
+    public byte[] getBytes() {
+        byte[] bytes = null;
+        try {
+            bytes = get().getBytes();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        } catch (ExecutionException e) {
+            e.printStackTrace();
+        }
+        return bytes;
+    }
+}
+</code></pre>
+
+<hr />
+
+<p>方法二： 更易于理解</p>
+
+<p>Retriever.java</p>
+
+<pre><code>package content;
+
+public class Retriever {
+    public static Content retrieve(final String urlstr) {
+        final AsyncContentImpl future = new AsyncContentImpl();
+
+        new Thread() {
+            public void run() {
+                future.setContent(new SyncContentImpl(urlstr));
+            }
+        }.start();
+
+        return future;
+    }
+}
+</code></pre>
+
+<p>AsyncContentImpl.java</p>
+
+<pre><code>package content;
+
+class AsyncContentImpl implements Content {
+    private SyncContentImpl synccontent;
+    private boolean ready = false;
+    public synchronized void setContent(SyncContentImpl synccontent) {
+        this.synccontent = synccontent;
+        this.ready = true;
+        notifyAll();
+    }
+    public synchronized byte[] getBytes() {
+        while (!ready) {
+            try {
+                wait();
+            } catch (InterruptedException e) {
+            }
+        }
+        return synccontent.getBytes();
+    }
+}
+
+</code></pre>
+
+<ul>
+<li><p>在Future Pattern处理异常</p>
+
+<ul><li>修改Host类，让RealData的实例在制作时如果发生异常，会将该异常设置到FutureData类。</li>
+<li>将设置（set）异常的方法setException新增到FutureData类中</li>
+<li>为了将发生的异常“包起来”，我们使用异常java.util.concurrent.ExecutionException</li>
+<li>还要让getContent方法抛出ExecutionException</li></ul></li>
+</ul>
+
+<p>Host.java</p>
+
+<pre><code>public class Host {
+    public Data request(final int count, final char c) {
+        System.out.println("    request(" + count + ", " + c + ") BEGIN");
+
+        // (1) 制作FutureData的实例
+        final FutureData future = new FutureData();
+
+        // (2) 启动用以建立RealData的新线程
+        new Thread() {
+            public void run() {
+                try {
+                    RealData realdata = new RealData(count, c);
+                    future.setRealData(realdata);
+                } catch (Exception e) {
+                    future.setException(e);
+                }
+            }
+        }.start();
+
+        System.out.println("    request(" + count + ", " + c + ") END");
+
+        // (3) 将FutureData的实例当成返回值返回
+        return future;
+    }
+}
+</code></pre>
+
+<p>Data.java</p>
+
+<pre><code>import java.util.concurrent.ExecutionException;
+
+public interface Data {
+    //在这里抛出了异常
+    public abstract String getContent() throws ExecutionException;
+}
+</code></pre>
+
+<p>FutureData.java</p>
+
+<pre><code>import java.util.concurrent.ExecutionException;
+
+public class FutureData implements Data {
+    private RealData realdata = null;
+    private ExecutionException exception = null;
+    private boolean ready = false;
+    public synchronized void setRealData(RealData realdata) {
+        if (ready) {
+            return;
+        }
+        this.realdata = realdata;
+        this.ready = true;
+        notifyAll();
+    }
+    //要指定到exception的是ExecutionException的实例
+    public synchronized void setException(Throwable throwable) {
+        if (ready) {
+            return;
+        }
+        this.exception = new ExecutionException(throwable);
+        this.ready = true;
+        notifyAll();
+    }
+    //这里也是抛出了异常
+    public synchronized String getContent() throws ExecutionException {
+        while (!ready) {
+            try {
+                wait();
+            } catch (InterruptedException e) {
+            }
+        }
+        if (exception != null) {
+            throw exception;
+        }
+        return realdata.getContent();
+    }
+}
+</code></pre>
+
+<p>Main.java</p>
+
+<pre><code>public class Main {
+    public static void main(String[] args) {
+        try {
+            System.out.println("main BEGIN");
+            Host host = new Host();
+
+            Data data = host.request(-1, 'N');
+
+            System.out.println("data = " + data.getContent());
+
+            System.out.println("main END");
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+</code></pre>
+
+<hr />
+
+<p>方法二：java.util.concurrent.FutureTask等类库</p>
+
+<p>FutureData.java</p>
+
+<pre><code>import java.util.concurrent.Callable;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.ExecutionException;
+
+public class FutureData extends FutureTask&lt;RealData&gt; implements Data {
+    public FutureData(Callable&lt;RealData&gt; callable) {
+        super(callable);
+    }
+    public String getContent() throws ExecutionException {
+        String string = null;
+        try {
+            string = get().getContent();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        return string;
+    }
+}
+</code></pre>
+
+<p>Host.java</p>
+
+<pre><code>import java.util.concurrent.Callable;
+
+public class Host {
+    public FutureData request(final int count, final char c) {
+        System.out.println("    request(" + count + ", " + c + ") BEGIN");
+
+        // (1) 制作FutureData的实例
+        //     （交给Callable&lt;RealData&gt;内部类创建）
+        FutureData future = new FutureData(
+            new Callable&lt;RealData&gt;() {
+                public RealData call() {
+                    return new RealData(count, c);
+                }
+            }
+        );
+
+        // (2) 启动用以建立RealData的新线程
+        new Thread(future).start();
+
+        System.out.println("    request(" + count + ", " + c + ") END");
+
+        // (3) 将FutureData的实例当成返回值返回
+        return future;
+    }
+}
+</code></pre>
 <script type='text/javascript'>
 $(document).ready(function(){
   if($('code').length>0){
