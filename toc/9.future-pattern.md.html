@@ -245,6 +245,40 @@ Client参与者也必须考虑多线程了。
 具体来说，就是Client参与者中必须加入一些程序代码，确保接受返回值时的安全性。</p>
 
 <h2>练习问题</h2>
+
+<ul>
+<li>范例程序运行时，有几条线程在运行呢？</li>
+</ul>
+
+<p><code>文龙也分享过看任何一个开源框架的时候，不是从某个函数或书籍开始，而是从框架的线程模型的角度看下去，看框架的线程有几个，各自的工作是什么？</code></p>
+
+<p>进行 new RealData(10,'A')的线程是A线程
+进行 new RealData(20,'B')的线程是B线程
+进行 new RealData(30,'C')的线程是C线程</p>
+
+<pre><code>主线程 main BEGIN
+主线程 request(10,A)BEGIN
+主线程 request(10,A)END
+主线程 request(20,B)BEGIN
+主线程 request(20,B)END
+主线程 request(30,C)BEGIN
+主线程 request(30,C)BEGIN
+
+线程A making RealData(10,A) BEGIN
+线程B making RealData(20,B) BEGIN
+
+主线程 request(30,C)END
+主线程 main otherJob BEGIN
+线程C making RealData(30，C)BEGIN
+线程A making RealData(10，A)END
+线程B making RealData(20，B)END
+主线程 main otherJob END
+主线程 data1=AAAAAAAAAA
+主线程 data2=BBBBBBBBBBBBBBBB
+线程C making ReadData(30,C)END
+主线程 data3=CCCCCCCCCCCCCCCCCCCCCCCCCCCC
+主线程 main END
+</code></pre>
 <script type='text/javascript'>
 $(document).ready(function(){
   if($('code').length>0){
