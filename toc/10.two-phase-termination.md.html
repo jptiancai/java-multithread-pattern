@@ -37,7 +37,7 @@
 是一旦变成true就不会再变成false的latch（门闩），所以就算从多条线程同时调用也无所谓。
 因为不会出现同时有线程要求设置为true，又有线程要求设置为false的race condition现象。</p>
 
-<pre><code>public class CountupThread extends Thread {
+<pre><code class="java">public class CountupThread extends Thread {
     // 计数器的值
     private long counter = 0;
 
@@ -86,9 +86,10 @@
 <li>Main.java</li>
 </ul>
 
-<p>Thread类的join方法，是用来等待到线程结束用的方法。在指定的线程结束前，不会从join方法中退出。</p>
+<p>Thread类的join方法，是用来等待到线程结束用的方法。在指定的线程结束前，不会从join方法中退出。
+检查指定线程现在是否结束了，可以使用Thread.isAlive方法</p>
 
-<pre><code>public class Main {
+<pre><code class="java">public class Main {
     public static void main(String[] args) {
         System.out.println("main: BEGIN");
         try {
@@ -131,7 +132,7 @@ java.lang.ThreadDeath异常而马上结束。即使该线程现在正在执行�
 （例如synchronized方法的中间），也会马上结束。例如下面的例子</li>
 </ul>
 
-<pre><code>class Position{
+<pre><code class="java">class Position{
     private int x;
     private int y;
     public synchronized void setXY(int newX,int newY){
@@ -162,7 +163,467 @@ java.lang.ThreadDeath异常而马上结束。即使该线程现在正在执行�
 <li>只测试中断状态也是不够的 interrupt()</li>
 </ul>
 
+<p>“调用interrupt方法后，如果线程正在sleep或wait，则会抛出InterruptedException异常，就算没有抛出异常，线程也会变成中断状态。
+既然如此，那又何必特地做一个新的shutdownRequested标识呢。只要catch住InterruptedException异常，并使用isInterrupted方法检查
+中断状态，不就好了吗？”</p>
+
+<p>提出这样的问题是很合理的。像范例程序，程序员如果可以掌握整个线程是，就不需要用到shutdownRequested标识了。
+只要catch 住InterruptedException，并使用
+isInterrupted方法，就可以正确地进行终止处理。</p>
+
+<p>但是，如果线程会执行到任何一个会忽视InterruptedException的地方(而往往程序员很相信自己，觉得这样没什么，
+肯定可以把所有抛出InterruptedException的地方都能正确地处理)，这样做就有待商榷了。
+“会忽视InterruptedException的地方”，像下面就是</p>
+
+<pre><code>try{
+    Thread.sleep(100);
+}catch(InterruptedException e){
+    //忽略 InterruptedException
+}</code></pre>
+
+<p>当wait、sleep、join一抛出InterruptedException后，线程就不是中断状态了。
+因为调用Thread.interrupted方法后，中断状态会被清除，所以必须检查终止请求。
+也就是说，不使用shutdownRequested标识，而且上述的做法，可能无论怎么调用shutdownRequest方法，
+记录还是被抹失了(程序员这时候就纳闷了，不应该了，是哪里处理问题吗？)。shutdownRequested标识是用来记录终止请求的标识。</p>
+
+<ul>
+<li>进行繁重的处理前，先检查终止请求</li>
+</ul>
+
+<p>为了使收到终止请求后，能尽快开始终止处理，故每当要开始繁重的处理前，
+应该先检查shutdownRequested标识，或是调用isShutdownRequested方法。这样一来，
+可使程序的响应性提高。</p>
+
+<ul>
+<li>NIO与多线程</li>
+</ul>
+
+<p>J2SE1.4NIO 中实现了java.nio.channels.Channel接口的类群，设计时已将多线程考虑进去了。</p>
+
+<p>例如，当线程对Channel阻挡住I/O时，其他线程可以把这个Channel给close掉。这是，这个阻挡I/O的线程，
+会收到AsynchronousCloseException异常。
+另外，线程对Channel阻挡住I/O时，其他线程也可以interrupt掉这个线程，这时，这个阻挡I/O的线程，会收到ClosedByInterruptException异常。</p>
+
+<ul>
+<li>优雅终止的线程
+<ul><li>安全地终止（安全性）</li></ul></li>
+</ul>
+
+<p>即使收到终止请求，也不会马上结束线程。而是竖立表示收到终止请求的shutdownRequested标识。
+以对象不会被破坏为前提，进行终止处理。
+就像妈妈说了“去睡觉吧”，也不会慌忙地整理玩具，而把玩具弄坏一样。</p>
+
+<ul>
+<li>一定会进行终止处理（生命性）</li>
+</ul>
+
+<p>当收到终止请求时，会中断可以中断的wait，前往终止处理。所以在shutdownRequest方法里，调用了interrupt方法。
+另外，为了在抛出异常结束的时候，也会执行到终止处理，故使用了try...finally块。
+就像不可以吧玩具散落一地，就跑去睡觉了的意思一样。</p>
+
+<ul>
+<li><p>送出终止请求后，要尽快进入终止处理（响应性）</p>
+
+<p>当收到终止请求后，会中断掉可以中断你的sleep，尽快前进到终止处理。于是在shutdownRequest方法中
+调用了interrupt方法。
+另外，在繁重的处理前，应该检查shutdownRequested标识。
+就像妈妈说了“快把玩具收拾好”后，应该尽快开始整理一样。
+像这样，优雅地结束掉线程，就像管教调皮的孩子一样。</p></li>
+</ul>
+
 <h2>练习问题</h2>
+
+<ul>
+<li>中断状态的变化</li>
+</ul>
+
+<pre><code class="java">
+public class CountupThread extends Thread {
+    // 计数器的值
+    private long counter = 0;
+
+    // 终止请求
+    public void shutdownRequest() {
+        interrupt();
+    }
+
+    // 动作
+    public void run() {
+        try {
+            while (!isInterrupted()) {
+                doWork();
+            }
+        } catch (InterruptedException e) {
+        } finally {
+            doShutdown();
+        }
+    }
+
+    // 操作
+    private void doWork() throws InterruptedException {
+        counter++;
+        System.out.println("doWork: counter = " + counter);
+        //这样处理程序就无法正常结束，因为一场被捕获了
+        try {
+            Thread.sleep(500);
+        } catch (InterruptedException e) {
+        }
+    }
+
+    // 终止处理
+    private void doShutdown() {
+        System.out.println("doShutdown: counter = " + counter);
+    }
+}
+</code></pre>
+
+<ul>
+<li>将范例程序改为优雅地终止处理</li>
+</ul>
+
+<p>像这样，用父类的方法来组成处理的架构，将该方法调用出来的方法用子类来安装（实现），再来
+执行具体的处理的这种Pattern，我们称之为Template Method木事</p>
+
+<p>GracefulThread.java</p>
+
+<pre><code class="java">public class GracefulThread extends Thread {
+    // 已经送出终止请求则为true
+    private volatile boolean shutdownRequested = false;
+
+    // 终止请求
+    public final void shutdownRequest() {
+        shutdownRequested = true;
+        interrupt();
+    }
+
+    // 判断终止请求是否已经送出
+    public final boolean isShutdownRequested() {
+        return shutdownRequested;
+    }
+
+    // 动作
+    //run方法不需要被继承，所以设为final方法
+    public final void run() {
+        try {
+            while (!isShutdownRequested()) {
+                doWork();
+            }
+        } catch (InterruptedException e) {
+        } finally {
+            doShutdown();
+        }
+    }
+
+    // 操作
+    protected void doWork() throws InterruptedException {
+    }
+
+    // 终止处理
+    protected void doShutdown() {
+    }
+}
+</code></pre>
+
+<pre><code class="java">public class CountupThread extends GracefulThread {
+    // 计数器的值
+    private long counter = 0;
+
+    // 操作
+    @Override
+    protected void doWork() throws InterruptedException {
+        counter++;
+        System.out.println("doWork: counter = " + counter);
+        Thread.sleep(500);
+    }
+
+    // 终止处理
+    @Override
+    protected void doShutdown() {
+        System.out.println("doShutdown: counter = " + counter);
+    }
+}
+</code></pre>
+
+<ul>
+<li>希望写一支GUI程序，在单击【execute】按钮后，会慢慢地显示出50个句点（.），而单击【Cancel】按钮可以中途停止显示</li>
+</ul>
+
+<p>MyFrame.java</p>
+
+<pre><code class="java">import java.io.IOException;
+import java.awt.FlowLayout;
+import java.awt.event.ActionListener;
+import java.awt.event.ActionEvent;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JButton;
+
+public class MyFrame extends JFrame implements ActionListener {
+    private final JButton executeButton = new JButton("Execute");
+    private final JButton cancelButton = new JButton("Cancel");
+    public MyFrame() {
+        super("MyFrame");
+        getContentPane().setLayout(new FlowLayout());
+        getContentPane().add(new JLabel("Two-Phase Termination Sample"));
+        getContentPane().add(executeButton);
+        getContentPane().add(cancelButton);
+        executeButton.addActionListener(this);
+        cancelButton.addActionListener(this);
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        pack();
+        setVisible(true);
+    }
+    public void actionPerformed(ActionEvent e) {
+        if (e.getSource() == executeButton) {
+            // 开始执行服务
+            Service.service();
+        } else if (e.getSource() == cancelButton) {
+            // 终止服务
+            Service.cancel();
+        }
+    }
+}
+</code></pre>
+
+<p>Main.java</p>
+
+<pre><code class="java">public class Main {
+    public static void main(String[] args) {
+        new MyFrame();
+    }
+}
+</code></pre>
+
+<p>Service.java</p>
+
+<pre><code class="java">public class Service {
+    private static GracefulThread thread = null;
+
+    // 开始执行服务（如果是执行中的话就balk）
+    public synchronized static void service() {
+        System.out.print("service");
+        if (thread != null &amp;&amp; thread.isAlive()) {
+            // Balking
+            System.out.println(" is balked.");
+            return;
+        }
+        // Thread-Per-Message
+        thread = new ServiceThread();
+        thread.start();
+    }
+
+    // 暂停服务
+    public synchronized static void cancel() {
+        if (thread != null) {
+            System.out.println("cancel.");
+            thread.shutdownRequest();
+        }
+    }
+}
+</code></pre>
+
+<p>ServiceThread.java</p>
+
+<pre><code class="java">public class ServiceThread extends GracefulThread {
+    private int count = 0;
+
+    // 处理中
+    @Override
+    protected void doWork() throws InterruptedException {
+        System.out.print(".");
+        Thread.sleep(100);
+        count++;
+        if (count &gt;= 50) {
+            shutdownRequest();  // 自己结束
+        }
+    }
+
+    // 终止处理
+    @Override
+    protected void doShutdown() {
+        System.out.println("done.");
+    }
+}
+</code></pre>
+
+<p>GracefulThread.java</p>
+
+<pre><code class="java">public class GracefulThread extends Thread {
+    // 已经送出终止请求则为true
+    private volatile boolean shutdownRequested = false;
+
+    // 终止请求
+    public final void shutdownRequest() {
+        shutdownRequested = true;
+        interrupt();
+    }
+
+    // 判断终止请求是否已经送出
+    public final boolean isShutdownRequested() {
+        return shutdownRequested;
+    }
+
+    // 动作
+    public final void run() {
+        try {
+            while (!isShutdownRequested()) {
+                doWork();
+            }
+        } catch (InterruptedException e) {
+        } finally {
+            doShutdown();
+        }
+    }
+
+    // 操作
+    protected void doWork() throws InterruptedException {
+    }
+
+    // 终止处理
+    protected void doShutdown() {
+    }
+}
+</code></pre>
+
+<ul>
+<li>volatile的意义</li>
+</ul>
+
+<p>范例程序中，shutdownRequested字段声明成volatile，请问这是为什么？</p>
+
+<p>java的内存模型中，有数个线程共享的字段必须要由synchronized来来保护，或声明为volatile。
+不然的话，一个线程对字段进行的修改，其他线程可能就无法进行引用。</p>
+
+<p>shutdownRequested字段为数个线程所共有，这数个线程都会连接上这个字段，因此必须以synchronized来保护，
+或是将字段声明为volatile。</p>
+
+<p>在范例程序中，并不需要线程的同步，但是需要内存的同步。因此将shutdownRequested字段声明为volatile.</p>
+
+<ul>
+<li>汉诺塔问题，改善响应性</li>
+</ul>
+
+<p>Main.java</p>
+
+<pre><code class="java">public class Main {
+    public static void main(String[] args) {
+        System.out.println("main: BEGIN");
+        try {
+            // 启动线程
+            HanoiThread t = new HanoiThread();
+            t.start();
+
+            // 等待一段时间
+            Thread.sleep(10000);
+
+            // 对线程送出终止请求
+            System.out.println("main: shutdownRequest");
+            t.shutdownRequest();
+
+            // 等待线程集结束
+            System.out.println("main: join");
+            t.join();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        System.out.println("main: END");
+    }
+}
+</code></pre>
+
+<p>HanoiThread.java</p>
+
+<pre><code class="java">public class HanoiThread extends Thread {
+    // 已经送出终止请求则为true
+    private volatile boolean shutdownRequested = false;
+    // 送出终止请求的时刻
+    private volatile long requestedTimeMillis = 0;
+
+    // 终止请求
+    public void shutdownRequest() {
+        requestedTimeMillis = System.currentTimeMillis();
+        shutdownRequested = true;
+        interrupt();
+    }
+
+    // 判断终止请求是否已经送出
+    public boolean isShutdownRequested() {
+        return shutdownRequested;
+    }
+
+    // 动作
+    public void run() {
+        try {
+            for (int level = 0; !isShutdownRequested(); level++) {
+                System.out.println("==== Level " + level + " ====");
+                doWork(level, 'A', 'B', 'C');
+                System.out.println("");
+            }
+        } catch (InterruptedException e) {
+        } finally {
+            doShutdown();
+        }
+    }
+
+    // 操作
+    private void doWork(int level, char posA, char posB, char posC) throws InterruptedException {
+        if (level &gt; 0) {
+            //如果出现结束处理的要求，马上就会当场抛出异常InterruptedException
+            //这样就可以很快进入结束
+            if (isShutdownRequested()) {
+                throw new InterruptedException();
+            }
+            doWork(level - 1, posA, posC, posB);
+            System.out.print(posA + "-&gt;" + posB + " ");
+            doWork(level - 1, posC, posB, posA);
+        }
+    }
+
+    // 终止处理
+    private void doShutdown() {
+        long time = System.currentTimeMillis() - requestedTimeMillis;
+        System.out.println("doShutdown: Latency = " + time + " msec.");
+    }
+}
+</code></pre>
+
+<hr />
+
+<p>另一种方法修改Main方法</p>
+
+<pre><code>public class Main {
+    public static void main(String[] args) {
+        // 生成新的线程
+        Thread thread = new Thread() {
+            public void run() {
+                while (true) {
+                    try {
+                        if (Thread.interrupted()) {
+                            throw new InterruptedException();
+                        }
+                        System.out.print(".");
+                    } catch (InterruptedException e) {
+                        System.out.print("*");
+                    }
+                }
+            }
+        };
+
+        // 启动线程
+        thread.start();
+
+        // 等待5秒
+        try {
+            Thread.sleep(5000);
+        } catch (InterruptedException e) {
+        }
+
+        // 通过interrupt终止线程
+        thread.interrupt();
+    }
+}
+
+</code></pre>
 <script type='text/javascript'>
 $(document).ready(function(){
   if($('code').length>0){

@@ -1,0 +1,101 @@
+﻿<!doctype html public '-//W3C//DTD HTML 4.0 Transitional //EN'>
+<html>
+<head>
+<title>11.thread-specific-storage</title>
+<meta charset='UTF-8' />
+<meta name='generator' content='EverEdit' />
+<link href='E:\EverEdit\mode\markdown\default.css' rel='stylesheet'></link>
+<link href='E:\EverEdit\mode\markdown\prettify.css' rel='stylesheet'></link>
+<script type='text/javascript' src='E:\EverEdit\mode\markdown\prettify.js'></script>
+<script type='text/javascript' src='E:\EverEdit\mode\markdown\jquery-1.10.2.min.js'></script>
+<script type='text/javascript' src='E:\EverEdit\mode\markdown\toc.js'></script>
+</head>
+<body>
+<div id='generated-toc'></div>
+<h2>概念</h2>
+
+<p>这里是保管箱间，在这里，有许多投币保管箱都排在一起，有个人拿着自己的要是进来了保管箱间，
+当他退出的时候，手上拿着自己的行李。又有一个人拿着自己的钥匙进来了，虽然进到同一个保管箱间，但一定是打开
+自己的保管箱。每个用户，都会从各自的保管箱中拿出自己的行李。</p>
+
+<p>Thread-Specific Storage Pattern是只有一个入口，但内部会对每个线程提供特有
+存储空间的Pattern。</p>
+
+<p>使用java标准链接库时，可以用java.lang.ThreadLocal类加以实现。</p>
+
+<h2>范例程序1：没有使用Thread-Specific Storage Pattern</h2>
+
+<p><img src="thread-specific1.png" alt="thread-specific" title="" /></p>
+
+<ul>
+<li>Log.java</li>
+</ul>
+
+<pre><code class="java">import java.io.PrintWriter;
+import java.io.FileWriter;
+import java.io.IOException;
+
+public class Log {
+    private static PrintWriter writer = null;
+
+    // 初始化Writer字段
+    static {
+        try {
+            writer = new PrintWriter(new FileWriter("log.txt"));
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    // 加入一条log
+    public static void println(String s) {
+        writer.println(s);
+    }
+
+    // 关闭log
+    public static void close() {
+        writer.println("==== End of log ====");
+        writer.close();
+    }
+}
+</code></pre>
+
+<ul>
+<li>Main.java</li>
+</ul>
+
+<pre><code class="java">public class Main {
+    public static void main(String[] args) {
+        System.out.println("BEGIN");
+        for (int i = 0; i &lt; 10; i++) {
+            Log.println("main: i = " + i);
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+            }
+        }
+        Log.close();
+        System.out.println("END");
+    }
+}
+</code></pre>
+
+<h2>范例程序2：使用Thread-Specific Storage Pattern</h2>
+
+<h2>适用性</h2>
+
+<h2>缺点</h2>
+
+<h2>知识点</h2>
+
+<h2>练习问题</h2>
+<script type='text/javascript'>
+$(document).ready(function(){
+  if($('code').length>0){
+    $('code').parent().addClass('prettyprint linenums');
+    prettyPrint();
+};
+});
+</script>
+</body>
+</html>
