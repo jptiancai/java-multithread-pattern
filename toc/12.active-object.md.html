@@ -1,0 +1,169 @@
+﻿<!doctype html public '-//W3C//DTD HTML 4.0 Transitional //EN'>
+<html>
+<head>
+<title>12.active-object</title>
+<meta charset='UTF-8' />
+<meta name='generator' content='EverEdit' />
+<link href='E:\EverEdit\mode\markdown\default.css' rel='stylesheet'></link>
+<link href='E:\EverEdit\mode\markdown\prettify.css' rel='stylesheet'></link>
+<script type='text/javascript' src='E:\EverEdit\mode\markdown\prettify.js'></script>
+<script type='text/javascript' src='E:\EverEdit\mode\markdown\jquery-1.10.2.min.js'></script>
+<script type='text/javascript' src='E:\EverEdit\mode\markdown\toc.js'></script>
+</head>
+<body>
+<div id='generated-toc'></div>
+<h2>概念</h2>
+
+<p>公司里有很多人在工作。柜台人员、营业人员、生产线的人员、管理人员、负责产品发送、
+搬运的人员等，各种人员互相协调，组成一个公司。
+公司整体联在一起。仿佛是有一个人的人格——所以叫做“法人”。</p>
+
+<p>Active Object Pattern里出现的“主动对象”，并不只是“自己拥有独立的线程”而已（比如java.lang.Thread类）
+它还具有可从外不接受异步消息，并能配合需要返回处理结果的特征。</p>
+
+<p>使用Active Object Pattern组织成“主动对象”，就很想是一群个人集合在一起构成法人一样。
+虽然使用没有提供异步消息的java语言，但是使用Active Object Pattern，
+就可以组指出能够处理异步消息的“主动对象”。</p>
+
+<p>Active Object Pattern中使用到了Producer-Consumer Patern+Thread-Per-Message Pattern
++ Future Pattern等Pattern</p>
+
+<h2>范例程序</h2>
+
+<p>建立的是一个具有“建立字符串（makeString）”、“显示字符串（displayString）”两个
+功能（可处理两种异步消息）的“主动对象”。</p>
+
+<ul>
+<li>Main.java</li>
+</ul>
+
+<p>使用ActiveObjectFactory类的createActiveObject方法，建立activeObject对象</p>
+
+<pre><code class="java">import activeobject.ActiveObject;
+import activeobject.ActiveObjectFactory;
+
+public class Main {
+    public static void main(String[] args) {
+        ActiveObject activeObject = ActiveObjectFactory.createActiveObject();
+        new MakerClientThread("Alice", activeObject).start();
+        new MakerClientThread("Bobby", activeObject).start();
+        new DisplayClientThread("Chris", activeObject).start();
+    }
+}
+</code></pre>
+
+<ul>
+<li>MakerClientThread.java</li>
+</ul>
+
+<p>makeString方法调用会马上回来，这个调用操作等同于对“主动对象”送出
+“建立字符串”这个异步消息</p>
+
+<p>返回值是Result类型，这里使用了Future Pattern，实际的返回值要使用
+getResultValue方法获取</p>
+
+<pre><code class="java">import activeobject.ActiveObject;
+import activeobject.Result;
+
+public class MakerClientThread extends Thread {
+    private final ActiveObject activeObject;
+    private final char fillchar;
+    public MakerClientThread(String name, ActiveObject activeObject) {
+        super(name);
+        this.activeObject = activeObject;
+        this.fillchar = name.charAt(0);
+    }
+    public void run() {
+        try {
+            for (int i = 0; true; i++) {
+                // 有返回值的调用
+                Result&lt;String&gt; result = activeObject.makeString(i, fillchar);
+                Thread.sleep(10);//模拟执行其他操作
+                String value = result.getResultValue();
+                System.out.println(Thread.currentThread().getName() + ": value = " + value);
+            }
+        } catch (InterruptedException e) {
+        }
+    }
+}
+
+</code></pre>
+
+<ul>
+<li>DisplayClientThread.java</li>
+</ul>
+
+<p>displayString方法调用会马上回来，这个调用操作等同于对“主动对象”送出
+“显示字符串”这个异步消息</p>
+
+<pre><code class="java">import activeobject.ActiveObject;
+import activeobject.Result;
+
+public class DisplayClientThread extends Thread {
+    private final ActiveObject activeObject;
+    public DisplayClientThread(String name, ActiveObject activeObject) {
+        super(name);
+        this.activeObject = activeObject;
+    }
+    public void run() {
+        try {
+            for (int i = 0; true; i++) {
+                // 没有返回值的调用
+                String string = Thread.currentThread().getName() + " " + i;
+                activeObject.displayString(string);
+                Thread.sleep(200);
+            }
+        } catch (InterruptedException e) {
+        }
+    }
+}</code></pre>
+
+<hr />
+
+<p>“主动对象”端</p>
+
+<ul>
+<li>ActiveObject.java</li>
+</ul>
+
+<pre><code class="java">package activeobject;
+
+public interface ActiveObject {
+    public abstract Result&lt;String&gt; makeString(int count, char fillchar);
+    public abstract void displayString(String string);
+}
+</code></pre>
+
+<ul>
+<li>ActiveObjectFactory.java</li>
+</ul>
+
+<pre><code class="java">
+package activeobject;
+
+public class ActiveObjectFactory {
+    public static ActiveObject createActiveObject() {
+        Servant servant = new Servant();
+        ActivationQueue queue = new ActivationQueue();
+        SchedulerThread scheduler = new SchedulerThread(queue);
+        Proxy proxy = new Proxy(scheduler, servant);
+        scheduler.start();
+        return proxy;
+    }
+}</code></pre>
+
+<h2>缺点</h2>
+
+<h2>知识点</h2>
+
+<h2>练习问题</h2>
+<script type='text/javascript'>
+$(document).ready(function(){
+  if($('code').length>0){
+    $('code').parent().addClass('prettyprint linenums');
+    prettyPrint();
+};
+});
+</script>
+</body>
+</html>
