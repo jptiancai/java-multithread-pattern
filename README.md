@@ -12,7 +12,7 @@
 - [Immutable Pattern](#immutable-pattern)
 - [Guarded Suspension Pattern](#guarded-suspension)
 - [Balking Pattern](#balking-pattern)
-- [Producer-Consumer Pattern](#producer-consumer)
+- [Producer-Consumer Pattern](toc/5.producer-consumer.md)
 - [Read-Write Lock Pattern](#read-write-lock)
 - [Thread-Per_Message Patterm](#thread-per-message)
 - [Worker Thread Pattern](#work-thread)
